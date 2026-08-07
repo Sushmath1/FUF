@@ -1,29 +1,41 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next'
+import { Toaster } from 'react-hot-toast'
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+import { AppProviders } from '@/components/AppProviders'
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "FindUrFest",
-  description: "Campus fest authentication and event infrastructure",
-};
+  title: 'FindUrFest - Your fest, your schedule',
+  description: 'Real-time venue updates and personal schedules for college fests',
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#030712',
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">{children}</body>
+    <html lang="en">
+      <body>
+        <AppProviders>{children}</AppProviders>
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: '#0f172a',
+              color: '#f1f5f9',
+              border: '1px solid #1e293b',
+              borderRadius: '12px',
+              fontSize: '14px',
+            },
+            duration: 5000,
+          }}
+        />
+      </body>
     </html>
-  );
+  )
 }

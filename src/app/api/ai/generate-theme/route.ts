@@ -36,9 +36,13 @@ const isThemeResult = (value: unknown): value is ThemeResult => {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session || session.user.role !== 'college') return err('Unauthorized', 401)
+    const authedCollege = session?.user?.role === 'college' ? session.user.id : null
 
-    if (!rateLimit(`theme-gen:${session.user.id}`, 10, 3600000).success) {
+    const limiterKey = authedCollege
+      ? `theme-gen:${authedCollege}`
+      : `theme-gen-public:${request.headers.get('x-forwarded-for') ?? 'unknown'}`
+
+    if (!rateLimit(limiterKey, 10, 3600000).success) {
       return err('Too many theme generations. Try again later.', 429)
     }
 
@@ -48,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     if (!description) return err('Description required', 400)
     if (description.length > 300) return err('Description too long', 400)
-    if (session.user.id !== collegeId) return err('Forbidden', 403)
+    if (authedCollege && collegeId && authedCollege !== collegeId) return err('Forbidden', 403)
 
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -111,23 +115,26 @@ export async function POST(request: NextRequest) {
       if (!hexRegex.test(theme[field])) return err('AI returned invalid color format', 500)
     }
 
-    await prisma.college.update({
-      where: { id: collegeId },
-      data: {
-        themeDescription: description,
-        primaryColor: theme.primaryColor,
-        secondaryColor: theme.secondaryColor,
-        accentColor: theme.accentColor,
-        bgColor: theme.bgColor,
-        surfaceColor: theme.surfaceColor,
-        fontStyle: theme.fontStyle,
-        moodText: theme.moodText,
-        particleStyle: theme.particleStyle,
-      },
-    })
+    if (authedCollege && collegeId) {
+      await prisma.college.update({
+        where: { id: collegeId },
+        data: {
+          themeDescription: description,
+          primaryColor: theme.primaryColor,
+          secondaryColor: theme.secondaryColor,
+          accentColor: theme.accentColor,
+          bgColor: theme.bgColor,
+          surfaceColor: theme.surfaceColor,
+          fontStyle: theme.fontStyle,
+          moodText: theme.moodText,
+          particleStyle: theme.particleStyle,
+        },
+      })
+    }
 
     return ok({ theme, description })
   } catch (e) {
     return serverErr(e)
   }
 }
+
