@@ -356,7 +356,7 @@ export default function VisitorSchedulePage() {
   return (
     <ThemeProvider {...theme}>
       <main style={{ minHeight: '100vh', background: 'var(--gradient)', position: 'relative', paddingBottom: 100 }}>
-        <ParticleBackground style={(theme.particleStyle as 'dots') ?? 'dots'} />
+        <ParticleBackground />
         <Navbar role={session?.user?.role} />
 
         {offline && (

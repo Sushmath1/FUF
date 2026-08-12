@@ -3,7 +3,13 @@
     "allow": [
       "Bash(npx tsc *)",
       "Bash(npx prisma *)",
-      "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/db\" npx prisma generate)"
+      "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/db\" npx prisma generate)",
+      "Bash(npm ls *)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(DOTENV_CONFIG_PATH=.env.local npm run build)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/college/register)"
     ]
   }
 }

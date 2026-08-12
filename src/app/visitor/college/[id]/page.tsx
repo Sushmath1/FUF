@@ -155,7 +155,7 @@ export default function VisitorCollegePage() {
   return (
     <ThemeProvider {...college}>
       <main style={{ minHeight: '100vh', background: 'var(--gradient)', position: 'relative', paddingBottom: 40 }}>
-        <ParticleBackground style={(college.particleStyle as 'dots') ?? 'dots'} />
+        <ParticleBackground />
         <Navbar />
 
         <section

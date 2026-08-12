@@ -1,28 +1,12 @@
 'use client'
-
 import { useEffect, useRef } from 'react'
 
-interface ParticleBackgroundProps {
-  style?: 'dots' | 'stars' | 'sparks' | 'petals' | 'bubbles'
-}
-
-type Particle = {
-  x: number
-  y: number
-  vx: number
-  vy: number
-  size: number
-  opacity: number
-  twinkle: number
-}
-
-export function ParticleBackground({ style = 'dots' }: ParticleBackgroundProps) {
+export function ParticleBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -30,48 +14,34 @@ export function ParticleBackground({ style = 'dots' }: ParticleBackgroundProps) 
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
     }
-
     setSize()
     window.addEventListener('resize', setSize)
 
-    const primary =
-      getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#06b6d4'
-
-    const count = style === 'stars' ? 80 : style === 'sparks' ? 40 : 60
-    const particles: Particle[] = Array.from({ length: count }, () => ({
+    // Very few, very slow, barely visible particles
+    const particles = Array.from({ length: 40 }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * (style === 'sparks' ? 1.5 : 0.4),
-      vy: (Math.random() - 0.5) * (style === 'sparks' ? 1.5 : 0.4),
-      size: style === 'stars' ? Math.random() * 1.5 + 0.5 : Math.random() * 2.5 + 0.5,
-      opacity: Math.random() * 0.5 + 0.1,
+      vx: (Math.random() - 0.5) * 0.15,
+      vy: (Math.random() - 0.5) * 0.15,
+      size: Math.random() * 1.5 + 0.5,
+      opacity: Math.random() * 0.15 + 0.03,
       twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: Math.random() * 0.01 + 0.005,
     }))
 
-    let animId = 0
+    let animId: number
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       for (const p of particles) {
-        p.twinkle += 0.02
-        const opacity = style === 'stars' ? p.opacity * (0.5 + 0.5 * Math.sin(p.twinkle)) : p.opacity
+        p.twinkle += p.twinkleSpeed
+        const opacity = p.opacity * (0.6 + 0.4 * Math.sin(p.twinkle))
 
         ctx.beginPath()
-        if (style === 'bubbles') {
-          ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2)
-          ctx.strokeStyle = `${primary}${Math.round(opacity * 150)
-            .toString(16)
-            .padStart(2, '0')}`
-          ctx.lineWidth = 1
-          ctx.stroke()
-        } else {
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-          ctx.fillStyle = `${primary}${Math.round(opacity * 255)
-            .toString(16)
-            .padStart(2, '0')}`
-          ctx.fill()
-        }
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(192, 132, 252, ${opacity})`
+        ctx.fill()
 
         p.x += p.vx
         p.y += p.vy
@@ -86,23 +56,21 @@ export function ParticleBackground({ style = 'dots' }: ParticleBackgroundProps) 
     }
 
     draw()
-
     return () => {
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', setSize)
     }
-  }, [style])
+  }, [])
 
   return (
     <canvas
       ref={canvasRef}
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
+        top: 0, left: 0,
         pointerEvents: 'none',
         zIndex: 0,
-        opacity: 0.5,
+        opacity: 1,
       }}
     />
   )

@@ -5,6 +5,7 @@ import Credentials from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   session: { strategy: 'jwt', maxAge: 24 * 60 * 60 },
   pages: { signIn: '/college/login' },
   providers: [
