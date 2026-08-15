@@ -44,13 +44,21 @@ type BuildingPin = {
   shortName: string
 }
 
+const FONT_PREVIEW_FAMILY: Record<string, string> = {
+  monospace: 'monospace',
+  serif: 'serif',
+  modern: 'var(--font)',
+  futuristic: 'sans-serif',
+  traditional: 'serif',
+}
+
 const defaultTheme: ThemeState = {
   themeDescription: '',
-  primaryColor: '#06b6d4',
-  secondaryColor: '#6366f1',
-  accentColor: '#22c55e',
-  bgColor: '#030712',
-  surfaceColor: '#0f172a',
+  primaryColor: '#ff6b47',
+  secondaryColor: '#ff9a6c',
+  accentColor: '#ffd4a8',
+  bgColor: '#120e0a',
+  surfaceColor: '#1a0f0a',
   fontStyle: 'modern',
   moodText: 'Your fest. Your schedule.',
   particleStyle: 'dots',
@@ -59,6 +67,7 @@ const defaultTheme: ThemeState = {
 export default function CollegeRegisterPage() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [themeGenerated, setThemeGenerated] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createdId, setCreatedId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -114,12 +123,20 @@ export default function CollegeRegisterPage() {
         ...prev,
         ...(data.theme ?? {}),
       }))
+      setThemeGenerated(true)
       toast.success('Theme generated')
-    } catch (genError) {
-      setError(genError instanceof Error ? genError.message : 'Theme generation failed')
+    } catch {
+      setError("Couldn't generate a theme right now. Try again or skip to use our default theme.")
     } finally {
       setLoading(false)
     }
+  }
+
+  const skipTheme = () => {
+    setTheme(defaultTheme)
+    setThemeGenerated(false)
+    setError('')
+    setStep(3)
   }
 
   const onMapUpload = (file: File | null) => {
@@ -277,11 +294,11 @@ export default function CollegeRegisterPage() {
 
           {step === 2 && (
             <section className="card" style={{ padding: 20 }}>
-              <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>Step 2 - Theme setup</h2>
+              <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>Design your fest theme</h2>
 
               <textarea
                 rows={5}
-                placeholder="Describe your fest theme — e.g. Cyberpunk dark, neon green electric vibes"
+                placeholder="Describe your fest vibe... e.g. Cyberpunk neon nights, Ancient royal gold, Beach summer party, Onam harvest festival"
                 value={theme.themeDescription}
                 onChange={(event) => setTheme({ ...theme, themeDescription: event.target.value })}
                 style={{ fontSize: 16 }}
@@ -294,39 +311,49 @@ export default function CollegeRegisterPage() {
               >
                 {loading ? (
                   <>
-                    <span className="spinner" /> Generating your theme...
+                    Creating your theme
+                    <span className="loading-dots">
+                      <span>.</span><span>.</span><span>.</span>
+                    </span>
                   </>
                 ) : (
                   'Generate theme with AI ✨'
                 )}
               </button>
 
-              <div className="card" style={{ marginTop: 18, padding: 16, borderColor: 'var(--primary)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8 }}>
-                  {[theme.primaryColor, theme.secondaryColor, theme.accentColor, theme.bgColor, theme.surfaceColor].map((color, i) => (
-                    <div key={i} style={{ background: color, height: 44, borderRadius: 8, border: '1px solid var(--border)' }} />
-                  ))}
+              {themeGenerated && (
+                <div className="card" style={{ marginTop: 18, padding: 16, borderColor: 'var(--primary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+                    {[theme.primaryColor, theme.secondaryColor, theme.accentColor, theme.bgColor, theme.surfaceColor].map((color, i) => (
+                      <div key={i} style={{ width: 40, height: 40, borderRadius: '50%', background: color, border: '2px solid var(--border)' }} />
+                    ))}
+                  </div>
+                  <p style={{ marginTop: 14, fontWeight: 800, fontSize: 18, color: theme.primaryColor, textAlign: 'center' }}>
+                    {theme.moodText}
+                  </p>
+                  <p style={{ marginTop: 8, textAlign: 'center', color: 'var(--text-muted)', fontFamily: FONT_PREVIEW_FAMILY[theme.fontStyle] ?? 'var(--font)' }}>
+                    Aa Bb Cc — {theme.fontStyle} style
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                    <button className="btn-outline" style={{ flex: 1 }} onClick={() => void generateTheme()} disabled={loading}>
+                      Regenerate
+                    </button>
+                    <button className="btn-primary" style={{ flex: 1 }} onClick={() => setStep(3)}>
+                      Looks good, continue
+                    </button>
+                  </div>
                 </div>
-                <p style={{ marginTop: 12, fontWeight: 800, fontSize: 18, color: theme.primaryColor }}>{theme.moodText}</p>
-                <button
-                  className="btn-outline"
-                  style={{ marginTop: 12, fontSize: 13, padding: '8px 16px' }}
-                  onClick={() => void generateTheme()}
-                  disabled={loading}
-                >
-                  Regenerate
-                </button>
-              </div>
+              )}
 
-              <div style={{ marginTop: 16, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
-                <select value={theme.fontStyle} onChange={(event) => setTheme({ ...theme, fontStyle: event.target.value })} style={{ padding: '8px 12px', fontSize: 13 }}>
-                  <option value="monospace">monospace</option>
-                  <option value="serif">serif</option>
-                  <option value="modern">modern</option>
-                  <option value="futuristic">futuristic</option>
-                  <option value="traditional">traditional</option>
-                </select>
-              </div>
+              <p style={{ marginTop: 20, textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={skipTheme}
+                  style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}
+                >
+                  Skip and use the default FindUrFest theme instead
+                </button>
+              </p>
             </section>
           )}
 
@@ -517,7 +544,7 @@ export default function CollegeRegisterPage() {
             </section>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, gap: 10 }}>
+          <div className="wizard-nav" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, gap: 10 }}>
             <button className="btn-outline" disabled={step === 1} onClick={() => setStep((s) => Math.max(1, s - 1))}>
               Back
             </button>
@@ -527,6 +554,28 @@ export default function CollegeRegisterPage() {
           </div>
         </div>
       </main>
+
+      <style jsx>{`
+        .loading-dots span {
+          display: inline-block;
+          animation: loadingDotBounce 1.2s ease-in-out infinite;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes loadingDotBounce {
+          0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+          40% { opacity: 1; transform: translateY(-3px); }
+        }
+
+        @media (max-width: 640px) {
+          .wizard-nav {
+            flex-direction: column;
+          }
+          .wizard-nav button {
+            width: 100%;
+          }
+        }
+      `}</style>
     </ThemeProvider>
   )
 }

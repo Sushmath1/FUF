@@ -17,21 +17,29 @@ export function ParticleBackground() {
     setSize()
     window.addEventListener('resize', setSize)
 
-    // Very few, very slow, barely visible particles
-    const particles = Array.from({ length: 40 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.15,
-      vy: (Math.random() - 0.5) * 0.15,
-      size: Math.random() * 1.5 + 0.5,
-      opacity: Math.random() * 0.15 + 0.03,
+    const warmColors = [
+      'rgba(255, 107, 71,',
+      'rgba(255, 154, 108,',
+      'rgba(255, 184, 77,',
+      'rgba(255, 138, 91,',
+    ]
+
+    const particles = Array.from({ length: 45 }, () => ({
+      x: Math.random() * (canvas?.width ?? 800),
+      y: Math.random() * (canvas?.height ?? 600),
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      size: Math.random() * 2.5 + 1,
+      opacity: Math.random() * 0.15 + 0.06,
       twinkle: Math.random() * Math.PI * 2,
-      twinkleSpeed: Math.random() * 0.01 + 0.005,
+      twinkleSpeed: Math.random() * 0.008 + 0.004,
+      color: warmColors[Math.floor(Math.random() * warmColors.length)],
     }))
 
     let animId: number
 
     const draw = () => {
+      if (!ctx || !canvas) return
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       for (const p of particles) {
@@ -40,7 +48,7 @@ export function ParticleBackground() {
 
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(192, 132, 252, ${opacity})`
+        ctx.fillStyle = `${p.color}${opacity})`
         ctx.fill()
 
         p.x += p.vx
@@ -65,13 +73,7 @@ export function ParticleBackground() {
   return (
     <canvas
       ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0, left: 0,
-        pointerEvents: 'none',
-        zIndex: 0,
-        opacity: 1,
-      }}
+      style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 0 }}
     />
   )
 }

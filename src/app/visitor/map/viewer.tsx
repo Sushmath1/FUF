@@ -8,7 +8,7 @@ export function CampusMapViewer({ points }: { points: Array<{ label: string; lat
   const defaultCenter = points[0] ? [points[0].lat, points[0].lng] : [12.9716, 77.5946]
 
   return (
-    <div style={{ height: 420, width: '100%' }}>
+    <div style={{ height: 'min(420px, 60vh)', width: '100%' }}>
       <MapContainer center={defaultCenter as [number, number]} zoom={16} style={{ height: '100%', width: '100%', borderRadius: 10 }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

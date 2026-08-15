@@ -20,24 +20,26 @@ export default function Home() {
       <ParticleBackground />
       <Navbar />
 
-      {/* Soft background orbs */}
-      <div style={{
-        position: 'absolute', top: '-20%', left: '-10%',
-        width: 600, height: 600,
-        background: 'radial-gradient(circle, rgba(192,132,252,0.08) 0%, transparent 70%)',
-        borderRadius: '50%', pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: '-20%', right: '-10%',
+      {/* Warm background blobs */}
+      <div className="blob" style={{
+        position: 'absolute', top: '-15%', left: '-10%',
         width: 500, height: 500,
-        background: 'radial-gradient(circle, rgba(129,140,248,0.08) 0%, transparent 70%)',
-        borderRadius: '50%', pointerEvents: 'none',
+        background: 'radial-gradient(circle, rgba(255,107,71,0.07) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div className="blob" style={{
+        position: 'absolute', bottom: '-15%', right: '-10%',
+        width: 450, height: 450,
+        background: 'radial-gradient(circle, rgba(255,154,108,0.06) 0%, transparent 70%)',
+        pointerEvents: 'none',
+        animationDelay: '-3s',
       }} />
       <div style={{
-        position: 'absolute', top: '40%', right: '15%',
-        width: 300, height: 300,
-        background: 'radial-gradient(circle, rgba(52,211,153,0.05) 0%, transparent 70%)',
-        borderRadius: '50%', pointerEvents: 'none',
+        position: 'absolute', top: '35%', right: '10%',
+        width: 280, height: 280,
+        background: 'radial-gradient(circle, rgba(255,212,168,0.04) 0%, transparent 70%)',
+        borderRadius: '50%',
+        pointerEvents: 'none',
       }} />
 
       <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 560, paddingTop: 60 }}>
@@ -55,22 +57,20 @@ export default function Home() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(192,132,252,0.1)',
-              border: '1px solid rgba(192,132,252,0.2)',
+              background: 'rgba(255,107,71,0.1)',
+              border: '1px solid rgba(255,107,71,0.2)',
               borderRadius: 20,
-              padding: '6px 16px',
+              padding: '6px 18px',
               fontSize: 12,
               letterSpacing: 2,
-              color: 'var(--primary)',
+              color: 'var(--secondary)',
               textTransform: 'uppercase' as const,
               fontWeight: 700,
               marginBottom: 28,
               backdropFilter: 'blur(8px)',
             }}
           >
-            <span>✦</span>
             College Fest Navigator
-            <span>✦</span>
           </motion.div>
 
           {/* Title */}
@@ -87,29 +87,23 @@ export default function Home() {
             }}
           >
             <span style={{
-              background: 'linear-gradient(135deg, #f0eeff, #c084fc, #818cf8)',
+              backgroundImage: 'linear-gradient(135deg, #b8461f, #ff6b47)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-            }}>
-              Find
-            </span>
+            }}>Find</span>
             <span style={{
-              background: 'linear-gradient(135deg, #c084fc, #f472b6, #fb7185)',
+              backgroundImage: 'linear-gradient(135deg, #ff6b47, #e8511f)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-            }}>
-              Ur
-            </span>
+            }}>Ur</span>
             <span style={{
-              background: 'linear-gradient(135deg, #818cf8, #60a5fa, #34d399)',
+              backgroundImage: 'linear-gradient(135deg, #ff9a6c, #ff6b47)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-            }}>
-              Fest
-            </span>
+            }}>Fest</span>
           </motion.h1>
 
           {/* Tagline */}
@@ -122,12 +116,11 @@ export default function Home() {
               color: 'var(--text-muted)',
               marginBottom: 48,
               lineHeight: 1.7,
-              fontWeight: 400,
             }}
           >
             Real-time venue updates. AI-powered personal schedules.
             <br />
-            <span style={{ color: 'rgba(192,132,252,0.7)' }}>Never miss your event again.</span>
+            <span style={{ color: 'rgba(255,154,108,0.7)' }}>Never miss your event again.</span>
           </motion.p>
 
           {/* Buttons */}
@@ -140,34 +133,32 @@ export default function Home() {
             <motion.div whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
               <Link href="/visitor/search" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                background: 'linear-gradient(135deg, #c084fc, #818cf8)',
+                background: 'linear-gradient(135deg, #ff6b47, #ff9a6c)',
                 color: 'white',
-                padding: '16px 32px', borderRadius: 16,
+                padding: '17px 32px', borderRadius: 16,
                 fontSize: 16, fontWeight: 800, textDecoration: 'none',
-                boxShadow: '0 8px 32px rgba(192,132,252,0.35)',
-                letterSpacing: '0.2px',
+                boxShadow: '0 8px 32px rgba(255,107,71,0.35)',
               }}>
-                🎉 I&apos;m attending a fest
+                I&apos;m attending a fest
               </Link>
             </motion.div>
 
             <motion.div whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
               <Link href="/college/register" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                background: 'rgba(255,255,255,0.04)',
-                color: 'var(--primary)',
-                padding: '16px 32px', borderRadius: 16,
+                background: 'rgba(255,200,160,0.05)',
+                color: 'var(--secondary)',
+                padding: '17px 32px', borderRadius: 16,
                 fontSize: 16, fontWeight: 800, textDecoration: 'none',
-                border: '1px solid rgba(192,132,252,0.25)',
+                border: '1px solid rgba(255,107,71,0.25)',
                 backdropFilter: 'blur(16px)',
-                letterSpacing: '0.2px',
               }}>
-                🏫 Register my college
+                Register my college
               </Link>
             </motion.div>
           </motion.div>
 
-          {/* Bottom link */}
+          {/* Sign in link */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -175,38 +166,10 @@ export default function Home() {
             style={{ marginTop: 36, color: 'var(--text-muted)', fontSize: 13 }}
           >
             Already registered?{' '}
-            <Link href="/college/login" style={{
-              color: 'var(--primary)', textDecoration: 'none',
-              fontWeight: 600,
-            }}>
+            <Link href="/college/login" style={{ color: 'var(--secondary)', textDecoration: 'none', fontWeight: 600 }}>
               College sign in →
             </Link>
           </motion.p>
-
-          {/* Feature pills */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
-            style={{
-              display: 'flex', flexWrap: 'wrap' as const,
-              gap: 8, justifyContent: 'center', marginTop: 48,
-            }}
-          >
-            {['⚡ Real-time updates', '🗺️ Campus navigation', '🤖 AI scheduling', '📱 Works offline'].map(f => (
-              <span key={f} style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 20,
-                padding: '6px 14px',
-                fontSize: 12,
-                color: 'var(--text-muted)',
-                backdropFilter: 'blur(8px)',
-              }}>
-                {f}
-              </span>
-            ))}
-          </motion.div>
         </motion.div>
       </div>
     </main>
