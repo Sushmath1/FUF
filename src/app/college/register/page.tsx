@@ -8,7 +8,9 @@ import toast from 'react-hot-toast'
 
 import { Navbar } from '@/components/Navbar'
 import { ParticleBackground } from '@/components/ParticleBackground'
+import { ThemePicker } from '@/components/ThemePicker'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { PRESET_THEMES, type PresetTheme } from '@/lib/presetThemes'
 
 type ThemeState = {
   themeDescription: string
@@ -44,21 +46,13 @@ type BuildingPin = {
   shortName: string
 }
 
-const FONT_PREVIEW_FAMILY: Record<string, string> = {
-  monospace: 'monospace',
-  serif: 'serif',
-  modern: 'var(--font)',
-  futuristic: 'sans-serif',
-  traditional: 'serif',
-}
-
 const defaultTheme: ThemeState = {
   themeDescription: '',
-  primaryColor: '#ff6b47',
-  secondaryColor: '#ff9a6c',
-  accentColor: '#ffd4a8',
-  bgColor: '#120e0a',
-  surfaceColor: '#1a0f0a',
+  primaryColor: '#be185d',
+  secondaryColor: '#831843',
+  accentColor: '#f472b6',
+  bgColor: '#150810',
+  surfaceColor: '#200a15',
   fontStyle: 'modern',
   moodText: 'Your fest. Your schedule.',
   particleStyle: 'dots',
@@ -66,8 +60,6 @@ const defaultTheme: ThemeState = {
 
 export default function CollegeRegisterPage() {
   const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [themeGenerated, setThemeGenerated] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createdId, setCreatedId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -100,41 +92,22 @@ export default function CollegeRegisterPage() {
     return ''
   }, [form])
 
-  const generateTheme = async () => {
-    if (!theme.themeDescription.trim()) {
-      setError('Please describe your fest theme first')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch('/api/ai/generate-theme', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: theme.themeDescription }),
-      })
-
-      const data = (await response.json()) as { theme?: Partial<ThemeState>; error?: string }
-      if (!response.ok) throw new Error(data.error ?? 'Theme generation failed')
-
-      setTheme((prev) => ({
-        ...prev,
-        ...(data.theme ?? {}),
-      }))
-      setThemeGenerated(true)
-      toast.success('Theme generated')
-    } catch {
-      setError("Couldn't generate a theme right now. Try again or skip to use our default theme.")
-    } finally {
-      setLoading(false)
-    }
+  const selectTheme = (preset: PresetTheme) => {
+    setTheme({
+      themeDescription: preset.name,
+      primaryColor: preset.primaryColor,
+      secondaryColor: preset.secondaryColor,
+      accentColor: preset.accentColor,
+      bgColor: preset.bgColor,
+      surfaceColor: preset.surfaceColor,
+      fontStyle: preset.fontStyle,
+      moodText: preset.moodText,
+      particleStyle: preset.particleStyle,
+    })
   }
 
   const skipTheme = () => {
     setTheme(defaultTheme)
-    setThemeGenerated(false)
     setError('')
     setStep(3)
   }
@@ -208,6 +181,11 @@ export default function CollegeRegisterPage() {
           primaryColor: theme.primaryColor,
           secondaryColor: theme.secondaryColor,
           accentColor: theme.accentColor,
+          bgColor: theme.bgColor,
+          surfaceColor: theme.surfaceColor,
+          fontStyle: theme.fontStyle,
+          moodText: theme.moodText,
+          particleStyle: theme.particleStyle,
         }),
       })
 
@@ -296,52 +274,16 @@ export default function CollegeRegisterPage() {
             <section className="card" style={{ padding: 20 }}>
               <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>Design your fest theme</h2>
 
-              <textarea
-                rows={5}
-                placeholder="Describe your fest vibe... e.g. Cyberpunk neon nights, Ancient royal gold, Beach summer party, Onam harvest festival"
-                value={theme.themeDescription}
-                onChange={(event) => setTheme({ ...theme, themeDescription: event.target.value })}
-                style={{ fontSize: 16 }}
+              <ThemePicker
+                initialThemeId={PRESET_THEMES.find((preset) => preset.name === theme.themeDescription)?.id}
+                onSelect={selectTheme}
               />
-              <button
-                className="btn-primary"
-                style={{ marginTop: 12, width: '100%', padding: '16px 24px', fontSize: 16 }}
-                onClick={() => void generateTheme()}
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    Creating your theme
-                    <span className="loading-dots">
-                      <span>.</span><span>.</span><span>.</span>
-                    </span>
-                  </>
-                ) : (
-                  'Generate theme with AI ✨'
-                )}
-              </button>
 
-              {themeGenerated && (
-                <div className="card" style={{ marginTop: 18, padding: 16, borderColor: 'var(--primary)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
-                    {[theme.primaryColor, theme.secondaryColor, theme.accentColor, theme.bgColor, theme.surfaceColor].map((color, i) => (
-                      <div key={i} style={{ width: 40, height: 40, borderRadius: '50%', background: color, border: '2px solid var(--border)' }} />
-                    ))}
-                  </div>
-                  <p style={{ marginTop: 14, fontWeight: 800, fontSize: 18, color: theme.primaryColor, textAlign: 'center' }}>
-                    {theme.moodText}
-                  </p>
-                  <p style={{ marginTop: 8, textAlign: 'center', color: 'var(--text-muted)', fontFamily: FONT_PREVIEW_FAMILY[theme.fontStyle] ?? 'var(--font)' }}>
-                    Aa Bb Cc — {theme.fontStyle} style
-                  </p>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                    <button className="btn-outline" style={{ flex: 1 }} onClick={() => void generateTheme()} disabled={loading}>
-                      Regenerate
-                    </button>
-                    <button className="btn-primary" style={{ flex: 1 }} onClick={() => setStep(3)}>
-                      Looks good, continue
-                    </button>
-                  </div>
+              {theme.themeDescription && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+                  <button className="btn-primary" onClick={() => setStep(3)}>
+                    Looks good, continue
+                  </button>
                 </div>
               )}
 
@@ -556,17 +498,6 @@ export default function CollegeRegisterPage() {
       </main>
 
       <style jsx>{`
-        .loading-dots span {
-          display: inline-block;
-          animation: loadingDotBounce 1.2s ease-in-out infinite;
-        }
-        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes loadingDotBounce {
-          0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
-          40% { opacity: 1; transform: translateY(-3px); }
-        }
-
         @media (max-width: 640px) {
           .wizard-nav {
             flex-direction: column;

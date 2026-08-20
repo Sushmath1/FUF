@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { ok, err, serverErr } from '@/lib/apiHelpers'
-import { anthropic } from '@/lib/anthropic'
+import { getModel, generateWithRetry } from '@/lib/gemini'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { rateLimit } from '@/lib/rateLimit'
@@ -54,53 +54,58 @@ export async function POST(request: NextRequest) {
     if (description.length > 300) return err('Description too long', 400)
     if (authedCollege && collegeId && authedCollege !== collegeId) return err('Forbidden', 403)
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 500,
-      tools: [
-        {
-          name: 'generate_theme',
-          description: 'Generate a complete UI color theme from a description',
-          input_schema: {
-            type: 'object',
-            properties: {
-              primaryColor: { type: 'string', description: 'Main accent color as hex e.g. #06b6d4' },
-              secondaryColor: { type: 'string', description: 'Secondary accent as hex' },
-              accentColor: { type: 'string', description: 'Small highlights as hex' },
-              bgColor: { type: 'string', description: 'Page background hex - must be very dark for dark theme' },
-              surfaceColor: { type: 'string', description: 'Card/surface background hex - slightly lighter than bg' },
-              fontStyle: { type: 'string', enum: ['monospace', 'serif', 'modern', 'futuristic', 'traditional'] },
-              moodText: { type: 'string', description: 'Short 3-5 word tagline matching the vibe e.g. Hack the future' },
-              particleStyle: { type: 'string', enum: ['dots', 'stars', 'sparks', 'petals', 'bubbles'] },
-            },
-            required: [
-              'primaryColor',
-              'secondaryColor',
-              'accentColor',
-              'bgColor',
-              'surfaceColor',
-              'fontStyle',
-              'moodText',
-              'particleStyle',
-            ],
-          },
-        },
-      ],
-      tool_choice: { type: 'tool', name: 'generate_theme' },
-      messages: [
+    const model = getModel('gemini-flash-lite-latest')
+
+    const result = await generateWithRetry(model, {
+      contents: [
         {
           role: 'user',
-          content: `Generate a dark-theme UI color palette for a college fest with this description: "${description}".\nThe background must be very dark (near black). The primary color should be vivid and match the vibe. Make it look impressive and modern.`,
+          parts: [
+            {
+              text: `Generate a realistic, cohesive UI color palette for a college fest with this description: "${description}".
+
+Guidelines for realistic colors:
+- Colors should look like they belong together, like a professional brand palette, not random bright hex codes
+- Primary and secondary colors should be complementary or analogous on the color wheel, not clashing
+- The background must be a soft, light, slightly warm or cool neutral (think cream, soft white, pale blue-grey) — never pure white, never harsh
+- The surface color should be a very subtle variation of the background (barely different, like a card sitting on a page)
+- Accent color should be used sparingly — a small pop of contrast, not another dominant color
+- Think of real design systems: Stripe, Airbnb, Notion — muted, tasteful, not saturated neon
+- Avoid pure primary colors like #FF0000 or #00FF00 — use realistic tinted versions instead
+
+Respond ONLY with valid JSON in exactly this shape, no markdown formatting, no code fences, no extra text:
+{
+  "primaryColor": "#hexcode",
+  "secondaryColor": "#hexcode",
+  "accentColor": "#hexcode",
+  "bgColor": "#hexcode",
+  "surfaceColor": "#hexcode",
+  "fontStyle": "modern",
+  "moodText": "3-5 word tagline",
+  "particleStyle": "dots"
+}
+fontStyle must be one of: monospace, serif, modern, futuristic, traditional
+particleStyle must be one of: dots, stars, sparks, petals, bubbles`,
+            },
+          ],
         },
       ],
+      generationConfig: {
+        temperature: 0.5,
+        responseMimeType: 'application/json',
+      },
     })
 
-    const toolResult = response.content.find((block) => block.type === 'tool_use')
-    if (!toolResult || toolResult.type !== 'tool_use' || !isThemeResult(toolResult.input)) {
-      return err('Theme generation failed', 500)
+    let theme: unknown
+    try {
+      theme = JSON.parse(result.response.text())
+    } catch {
+      return err('Theme generation failed — invalid response format', 500)
     }
 
-    const theme = toolResult.input
+    if (!isThemeResult(theme)) {
+      return err('Theme generation failed', 500)
+    }
 
     const hexRegex = /^#[0-9A-Fa-f]{6}$/
     const colorFields: Array<keyof ThemeResult> = [

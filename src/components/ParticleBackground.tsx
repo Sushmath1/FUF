@@ -1,6 +1,26 @@
 'use client'
 import { useEffect, useRef } from 'react'
 
+const FALLBACK_COLORS = ['rgba(190, 24, 93,', 'rgba(244, 114, 182,', 'rgba(131, 24, 67,', 'rgba(219, 39, 119,']
+
+function hexToRgbaPrefix(hex: string): string | null {
+  const clean = hex.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return null
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b},`
+}
+
+function readThemeColors(): string[] {
+  const styles = getComputedStyle(document.documentElement)
+  const colors = [styles.getPropertyValue('--primary'), styles.getPropertyValue('--secondary'), styles.getPropertyValue('--accent')]
+    .map(hexToRgbaPrefix)
+    .filter((value): value is string => value !== null)
+
+  return colors.length > 0 ? colors : FALLBACK_COLORS
+}
+
 export function ParticleBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -17,12 +37,14 @@ export function ParticleBackground() {
     setSize()
     window.addEventListener('resize', setSize)
 
-    const warmColors = [
-      'rgba(255, 107, 71,',
-      'rgba(255, 154, 108,',
-      'rgba(255, 184, 77,',
-      'rgba(255, 138, 91,',
-    ]
+    // Re-read whenever ThemeProvider updates the CSS variables on
+    // documentElement (e.g. a new preset theme is selected), so particles
+    // pick up the change instead of staying stuck on the color read at mount.
+    let colors = readThemeColors()
+    const observer = new MutationObserver(() => {
+      colors = readThemeColors()
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
 
     const particles = Array.from({ length: 45 }, () => ({
       x: Math.random() * (canvas?.width ?? 800),
@@ -33,7 +55,7 @@ export function ParticleBackground() {
       opacity: Math.random() * 0.15 + 0.06,
       twinkle: Math.random() * Math.PI * 2,
       twinkleSpeed: Math.random() * 0.008 + 0.004,
-      color: warmColors[Math.floor(Math.random() * warmColors.length)],
+      colorIndex: Math.floor(Math.random() * 4),
     }))
 
     let animId: number
@@ -45,10 +67,11 @@ export function ParticleBackground() {
       for (const p of particles) {
         p.twinkle += p.twinkleSpeed
         const opacity = p.opacity * (0.6 + 0.4 * Math.sin(p.twinkle))
+        const color = colors[p.colorIndex % colors.length]
 
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-        ctx.fillStyle = `${p.color}${opacity})`
+        ctx.fillStyle = `${color}${opacity})`
         ctx.fill()
 
         p.x += p.vx
@@ -67,6 +90,7 @@ export function ParticleBackground() {
     return () => {
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', setSize)
+      observer.disconnect()
     }
   }, [])
 

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { ok, err, serverErr } from '@/lib/apiHelpers'
-import { anthropic } from '@/lib/anthropic'
+import { getModel, generateWithRetry } from '@/lib/gemini'
 import { prisma } from '@/lib/prisma'
 import { rateLimit, getClientIp } from '@/lib/rateLimit'
 
@@ -72,43 +72,48 @@ export async function POST(request: NextRequest) {
         .map((other) => other.id),
     }))
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
-      tools: [
-        {
-          name: 'select_events',
-          description: 'Select a non-conflicting set of events matching visitor interests',
-          input_schema: {
-            type: 'object',
-            properties: {
-              selectedEventIds: {
-                type: 'array',
-                items: { type: 'string' },
-                description:
-                  'Event IDs to include - must not pick two events that conflict with each other',
-              },
-              reasoning: { type: 'string', description: 'One sentence explaining the picks' },
-            },
-            required: ['selectedEventIds', 'reasoning'],
-          },
-        },
-      ],
-      tool_choice: { type: 'tool', name: 'select_events' },
-      messages: [
+    const model = getModel('gemini-flash-lite-latest')
+
+    const result = await generateWithRetry(model, {
+      contents: [
         {
           role: 'user',
-          content: `Visitor interests: "${interests}"\n\nAvailable events (each lists which other events it conflicts with by ID):\n${JSON.stringify(eventsWithConflicts, null, 2)}\n\nPick events that:\n1. Best match the visitor's interests\n2. Do NOT include two events that appear in each other's conflictsWith list\n3. Leave reasonable time between events where possible`,
+          parts: [
+            {
+              text: `Visitor interests: "${interests}"
+
+Available events (each lists which other events it conflicts with by ID):
+${JSON.stringify(eventsWithConflicts, null, 2)}
+
+Pick events that:
+1. Best match the visitor's interests
+2. Do NOT include two events that appear in each other's conflictsWith list
+3. Leave reasonable time between events where possible
+
+Respond ONLY with valid JSON in exactly this shape, no markdown, no extra text:
+{
+  "selectedEventIds": ["id1", "id2"],
+  "reasoning": "one sentence explaining the picks"
+}`,
+            },
+          ],
         },
       ],
+      generationConfig: { temperature: 0.5, responseMimeType: 'application/json' },
     })
 
-    const toolResult = response.content.find((block) => block.type === 'tool_use')
-    if (!toolResult || toolResult.type !== 'tool_use' || !isScheduleToolInput(toolResult.input)) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(result.response.text())
+    } catch {
       return err('Could not generate schedule. Please try again.', 500)
     }
 
-    const { selectedEventIds, reasoning } = toolResult.input
+    if (!isScheduleToolInput(parsed)) {
+      return err('Could not generate schedule. Please try again.', 500)
+    }
+
+    const { selectedEventIds, reasoning } = parsed
     const selected = eventsWithConflicts.filter((event) => selectedEventIds.includes(event.id))
 
     const validatedIds = new Set<string>()

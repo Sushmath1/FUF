@@ -2,19 +2,24 @@ import { z } from 'zod'
 
 export const collegeRegisterSchema = z.object({
   name: z.string().min(2).max(100).trim(),
-  shortName: z.string().min(1).max(10).trim().optional(),
+  shortName: z.string().min(1).max(30).trim().optional(),
   festName: z.string().min(2).max(100).trim(),
   festTagline: z.string().max(200).trim().optional(),
   festStartDate: z.string().datetime(),
   festEndDate: z.string().datetime(),
   contactName: z.string().min(2).max(100).trim(),
-  contactNumber: z.string().regex(/^[0-9+\-\s]{10,15}$/, 'Invalid phone number'),
+  contactNumber: z.string().regex(/^[0-9+\-\s()]{10,15}$/, 'Invalid phone number'),
   adminEmail: z.string().email().toLowerCase(),
   password: z.string().min(8).max(100),
   themeDescription: z.string().max(300).optional(),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  bgColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  surfaceColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  fontStyle: z.enum(['modern', 'serif', 'monospace', 'futuristic', 'traditional']).optional(),
+  moodText: z.string().max(100).optional(),
+  particleStyle: z.enum(['dots', 'stars', 'sparks', 'petals', 'bubbles']).optional(),
 })
 
 export const eventSchema = z.object({
@@ -34,6 +39,9 @@ export const buildingSchema = z.object({
   shortName: z.string().max(10).trim().optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
+  floorPlanUrl: z.string().trim().max(3_000_000).optional(),
+  entranceXPercent: z.number().min(0).max(100).optional(),
+  entranceYPercent: z.number().min(0).max(100).optional(),
   floors: z.number().int().min(1).max(20).optional(),
 })
 
@@ -46,6 +54,7 @@ export const venueSchema = z.object({
   yPercent: z.number().min(0).max(100).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
+  directions: z.string().max(300).trim().optional(),
 })
 
 export const verifySchema = z.object({

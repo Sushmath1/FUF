@@ -33,7 +33,7 @@ export function Navbar({ role }: NavbarProps) {
           color: 'white',
           textDecoration: 'none' as const,
           fontWeight: 700,
-          background: 'linear-gradient(135deg, #ff6b47, #ff9a6c)',
+          background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
           padding: '8px 16px',
           borderRadius: 10,
           fontSize: 13,
@@ -55,7 +55,7 @@ export function Navbar({ role }: NavbarProps) {
       <Link href="/" style={{ textDecoration: 'none' }}>
         <span style={{
           fontSize: 20, fontWeight: 900,
-          backgroundImage: 'linear-gradient(135deg, #ff9a6c, #ff6b47)',
+          backgroundImage: 'linear-gradient(135deg, var(--accent), var(--primary))',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',

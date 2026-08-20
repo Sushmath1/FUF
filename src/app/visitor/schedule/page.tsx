@@ -20,6 +20,8 @@ type ScheduleEvent = {
   category: string
   venueName: string
   buildingName: string | null
+  venueDirections: string | null
+  floor: number | null
   startTime: string
   endTime: string
   status: string
@@ -61,6 +63,16 @@ type Recommendation = {
 }
 
 type ChatItem = { role: 'user' | 'ai'; text: string }
+
+function fallbackDirections(event: ScheduleEvent) {
+  if (event.buildingName && event.floor) {
+    return `Head to ${event.buildingName}, floor ${event.floor}, follow the path to ${event.venueName}`
+  }
+  if (event.buildingName) {
+    return `Head to ${event.buildingName}, follow the path to ${event.venueName}`
+  }
+  return `Follow the highlighted path to reach ${event.venueName}`
+}
 
 export default function VisitorSchedulePage() {
   const { data: session } = useSession()
@@ -511,6 +523,9 @@ export default function VisitorSchedulePage() {
                       <p style={{ color: 'var(--text-muted)', marginTop: 4, fontSize: 13 }}>
                         Contact: {event.contactName ?? 'Help desk'} {event.contactNumber ? `| ${event.contactNumber}` : ''}
                       </p>
+                      <div style={{ marginTop: 10, padding: 12, background: 'var(--surface)', borderRadius: 10, fontSize: 13, color: 'var(--text)' }}>
+                        📍 {event.venueDirections || fallbackDirections(event)}
+                      </div>
                     </div>
 
                     <span

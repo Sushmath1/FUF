@@ -29,7 +29,13 @@ type Venue = {
   yPercent?: number | null
 }
 
+type LatLng = { lat: number; lng: number }
+type PositionPercent = { xPercent: number; yPercent: number }
+
 const MiniMap = dynamic(() => import('./mini-map').then((module) => module.MiniMap), { ssr: false })
+
+const emptyBuildingForm = { id: '', name: '', shortName: '', floorPlanUrl: '', floors: '1' }
+const emptyVenueForm = { name: '', buildingId: '', floor: '1', directions: '' }
 
 export default function CollegeMapSetupPage() {
   const { data: session } = useSession()
@@ -40,25 +46,12 @@ export default function CollegeMapSetupPage() {
   const [addingBuilding, setAddingBuilding] = useState(false)
   const [addingVenue, setAddingVenue] = useState(false)
 
-  const [buildingForm, setBuildingForm] = useState({
-    id: '',
-    name: '',
-    shortName: '',
-    lat: '',
-    lng: '',
-    floorPlanUrl: '',
-    floors: '1',
-    entranceXPercent: '',
-    entranceYPercent: '',
-  })
+  const [buildingForm, setBuildingForm] = useState(emptyBuildingForm)
+  const [buildingLocation, setBuildingLocation] = useState<LatLng | null>(null)
+  const [entrancePosition, setEntrancePosition] = useState<PositionPercent | null>(null)
 
-  const [venueForm, setVenueForm] = useState({
-    name: '',
-    buildingId: '',
-    floor: '1',
-    xPercent: '',
-    yPercent: '',
-  })
+  const [venueForm, setVenueForm] = useState(emptyVenueForm)
+  const [venuePosition, setVenuePosition] = useState<PositionPercent | null>(null)
 
   const [distanceForm, setDistanceForm] = useState({ fromVenueId: '', toVenueId: '', walkMinutes: '5' })
 
@@ -67,6 +60,11 @@ export default function CollegeMapSetupPage() {
       .filter((building) => typeof building.lat === 'number' && typeof building.lng === 'number')
       .map((building) => ({ label: building.shortName ?? building.name, lat: building.lat as number, lng: building.lng as number }))
   }, [buildings])
+
+  const selectedVenueBuilding = useMemo(
+    () => buildings.find((building) => building.id === venueForm.buildingId) ?? null,
+    [buildings, venueForm.buildingId],
+  )
 
   const loadData = async () => {
     if (!session?.user?.id) return
@@ -94,8 +92,31 @@ export default function CollegeMapSetupPage() {
     void loadData()
   }, [session?.user?.id])
 
+  const handleFloorPlanUpload = (file: File | null) => {
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Floor plan image must be under 5MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => setBuildingForm((prev) => ({ ...prev, floorPlanUrl: reader.result as string }))
+    reader.readAsDataURL(file)
+  }
+
+  const resetBuildingForm = () => {
+    setBuildingForm(emptyBuildingForm)
+    setBuildingLocation(null)
+    setEntrancePosition(null)
+  }
+
   const createBuilding = async () => {
     if (!session?.user?.id) return
+    if (!buildingLocation) {
+      toast.error('Click on the map to mark the building location first')
+      return
+    }
+
     setAddingBuilding(true)
 
     try {
@@ -105,8 +126,11 @@ export default function CollegeMapSetupPage() {
         body: JSON.stringify({
           name: buildingForm.name,
           shortName: buildingForm.shortName || undefined,
-          lat: buildingForm.lat ? Number(buildingForm.lat) : undefined,
-          lng: buildingForm.lng ? Number(buildingForm.lng) : undefined,
+          lat: buildingLocation.lat,
+          lng: buildingLocation.lng,
+          floorPlanUrl: buildingForm.floorPlanUrl || undefined,
+          entranceXPercent: entrancePosition?.xPercent,
+          entranceYPercent: entrancePosition?.yPercent,
           floors: Number(buildingForm.floors || '1'),
         }),
       })
@@ -115,17 +139,7 @@ export default function CollegeMapSetupPage() {
       if (!response.ok) throw new Error(data.error ?? 'Could not create building')
 
       toast.success('Building added')
-      setBuildingForm({
-        id: '',
-        name: '',
-        shortName: '',
-        lat: '',
-        lng: '',
-        floorPlanUrl: '',
-        floors: '1',
-        entranceXPercent: '',
-        entranceYPercent: '',
-      })
+      resetBuildingForm()
       await loadData()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create building')
@@ -144,11 +158,11 @@ export default function CollegeMapSetupPage() {
         body: JSON.stringify({
           name: buildingForm.name,
           shortName: buildingForm.shortName || undefined,
-          lat: buildingForm.lat ? Number(buildingForm.lat) : undefined,
-          lng: buildingForm.lng ? Number(buildingForm.lng) : undefined,
+          lat: buildingLocation?.lat,
+          lng: buildingLocation?.lng,
           floorPlanUrl: buildingForm.floorPlanUrl || undefined,
-          entranceXPercent: buildingForm.entranceXPercent ? Number(buildingForm.entranceXPercent) : undefined,
-          entranceYPercent: buildingForm.entranceYPercent ? Number(buildingForm.entranceYPercent) : undefined,
+          entranceXPercent: entrancePosition?.xPercent,
+          entranceYPercent: entrancePosition?.yPercent,
           floors: Number(buildingForm.floors || '1'),
         }),
       })
@@ -157,6 +171,7 @@ export default function CollegeMapSetupPage() {
       if (!response.ok) throw new Error(data.error ?? 'Could not update building')
 
       toast.success('Building updated')
+      resetBuildingForm()
       await loadData()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not update building')
@@ -189,15 +204,17 @@ export default function CollegeMapSetupPage() {
           name: venueForm.name,
           buildingId: venueForm.buildingId || undefined,
           floor: Number(venueForm.floor || '1'),
-          xPercent: venueForm.xPercent ? Number(venueForm.xPercent) : undefined,
-          yPercent: venueForm.yPercent ? Number(venueForm.yPercent) : undefined,
+          xPercent: venuePosition?.xPercent,
+          yPercent: venuePosition?.yPercent,
+          directions: venueForm.directions.trim() || undefined,
         }),
       })
 
       const data = (await response.json()) as { error?: string }
       if (!response.ok) throw new Error(data.error ?? 'Could not add venue')
 
-      setVenueForm({ name: '', buildingId: '', floor: '1', xPercent: '', yPercent: '' })
+      setVenueForm(emptyVenueForm)
+      setVenuePosition(null)
       toast.success('Venue added')
       await loadData()
     } catch (error) {
@@ -267,20 +284,93 @@ export default function CollegeMapSetupPage() {
         {tab === 'buildings' && (
           <div style={{ display: 'grid', gap: 12 }}>
             <div className="card" style={{ padding: 14 }}>
-              <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>Add building</h2>
+              <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>
+                {buildingForm.id ? 'Editing building' : 'Add building'}
+              </h2>
               <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
                 <input placeholder="Name" value={buildingForm.name} onChange={(e) => setBuildingForm({ ...buildingForm, name: e.target.value })} />
                 <input placeholder="Short name" value={buildingForm.shortName} onChange={(e) => setBuildingForm({ ...buildingForm, shortName: e.target.value })} />
-                <input placeholder="Latitude" value={buildingForm.lat} onChange={(e) => setBuildingForm({ ...buildingForm, lat: e.target.value })} />
-                <input placeholder="Longitude" value={buildingForm.lng} onChange={(e) => setBuildingForm({ ...buildingForm, lng: e.target.value })} />
                 <input placeholder="Floors" value={buildingForm.floors} onChange={(e) => setBuildingForm({ ...buildingForm, floors: e.target.value })} />
-                <input placeholder="Floor plan URL" value={buildingForm.floorPlanUrl} onChange={(e) => setBuildingForm({ ...buildingForm, floorPlanUrl: e.target.value })} />
-                <input placeholder="Entrance X %" value={buildingForm.entranceXPercent} onChange={(e) => setBuildingForm({ ...buildingForm, entranceXPercent: e.target.value })} />
-                <input placeholder="Entrance Y %" value={buildingForm.entranceYPercent} onChange={(e) => setBuildingForm({ ...buildingForm, entranceYPercent: e.target.value })} />
               </div>
-              <button className="btn-primary" style={{ marginTop: 10 }} onClick={() => void createBuilding()} disabled={addingBuilding}>
-                {addingBuilding ? <><span className="spinner" /> Saving...</> : 'Add building'}
-              </button>
+
+              <label style={{ display: 'block', marginTop: 14, marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                Floor plan image
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <label className="btn-outline" style={{ cursor: 'pointer', textAlign: 'center' }}>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/jpg"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      handleFloorPlanUpload(e.target.files?.[0] ?? null)
+                      e.target.value = ''
+                    }}
+                  />
+                  {buildingForm.floorPlanUrl ? 'Replace floor plan image' : 'Upload floor plan image'}
+                </label>
+                {buildingForm.floorPlanUrl && (
+                  <>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>✓ Uploaded</span>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      style={{ padding: '6px 12px', fontSize: 12 }}
+                      onClick={() => setBuildingForm((prev) => ({ ...prev, floorPlanUrl: '' }))}
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <p style={{ marginTop: 14, marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                Click on the map below to mark this building's location.
+              </p>
+              <MiniMap
+                points={mapPoints}
+                onMapClick={(lat, lng) => setBuildingLocation({ lat, lng })}
+                pendingPoint={buildingLocation}
+                pendingLabel={buildingForm.name || 'New building'}
+              />
+              {buildingLocation && (
+                <p style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                  Location set: {buildingLocation.lat.toFixed(5)}, {buildingLocation.lng.toFixed(5)}
+                </p>
+              )}
+
+              {buildingForm.floorPlanUrl && (
+                <div style={{ marginTop: 14 }}>
+                  <ClickableFloorPlan
+                    src={buildingForm.floorPlanUrl}
+                    pendingPercent={entrancePosition}
+                    onPick={(xPercent, yPercent) => setEntrancePosition({ xPercent, yPercent })}
+                    label="Click to mark the entrance point"
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                  onClick={() => void (buildingForm.id ? updateBuilding(buildingForm.id) : createBuilding())}
+                  disabled={addingBuilding || !buildingForm.name.trim() || !buildingLocation}
+                >
+                  {addingBuilding ? (
+                    <><span className="spinner" /> Saving...</>
+                  ) : buildingForm.id ? (
+                    'Save updates'
+                  ) : (
+                    'Add building'
+                  )}
+                </button>
+                {buildingForm.id && (
+                  <button className="btn-outline" onClick={resetBuildingForm}>
+                    Cancel edit
+                  </button>
+                )}
+              </div>
             </div>
 
             {buildings.map((building) => (
@@ -301,13 +391,19 @@ export default function CollegeMapSetupPage() {
                           id: building.id,
                           name: building.name,
                           shortName: building.shortName ?? '',
-                          lat: building.lat?.toString() ?? '',
-                          lng: building.lng?.toString() ?? '',
                           floorPlanUrl: building.floorPlanUrl ?? '',
                           floors: (building.floors ?? 1).toString(),
-                          entranceXPercent: building.entranceXPercent?.toString() ?? '',
-                          entranceYPercent: building.entranceYPercent?.toString() ?? '',
                         })
+                        setBuildingLocation(
+                          typeof building.lat === 'number' && typeof building.lng === 'number'
+                            ? { lat: building.lat, lng: building.lng }
+                            : null,
+                        )
+                        setEntrancePosition(
+                          typeof building.entranceXPercent === 'number' && typeof building.entranceYPercent === 'number'
+                            ? { xPercent: building.entranceXPercent, yPercent: building.entranceYPercent }
+                            : null,
+                        )
                       }}
                     >
                       Edit
@@ -319,20 +415,6 @@ export default function CollegeMapSetupPage() {
                 </div>
               </article>
             ))}
-
-            {buildingForm.id && (
-              <div className="card" style={{ padding: 14 }}>
-                <h3 style={{ fontWeight: 800, marginBottom: 8 }}>Editing building</h3>
-                <button className="btn-primary" onClick={() => void updateBuilding(buildingForm.id)}>
-                  Save updates
-                </button>
-              </div>
-            )}
-
-            <div className="card" style={{ padding: 14 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>Mini map</h3>
-              <MiniMap points={mapPoints} />
-            </div>
           </div>
         )}
 
@@ -342,17 +424,42 @@ export default function CollegeMapSetupPage() {
               <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>Add venue</h2>
               <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
                 <input placeholder="Venue name" value={venueForm.name} onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })} />
-                <select value={venueForm.buildingId} onChange={(e) => setVenueForm({ ...venueForm, buildingId: e.target.value })}>
+                <select
+                  value={venueForm.buildingId}
+                  onChange={(e) => {
+                    setVenueForm({ ...venueForm, buildingId: e.target.value })
+                    setVenuePosition(null)
+                  }}
+                >
                   <option value="">Select building</option>
                   {buildings.map((building) => (
                     <option key={building.id} value={building.id}>{building.name}</option>
                   ))}
                 </select>
                 <input placeholder="Floor" value={venueForm.floor} onChange={(e) => setVenueForm({ ...venueForm, floor: e.target.value })} />
-                <input placeholder="X % on floor plan" value={venueForm.xPercent} onChange={(e) => setVenueForm({ ...venueForm, xPercent: e.target.value })} />
-                <input placeholder="Y % on floor plan" value={venueForm.yPercent} onChange={(e) => setVenueForm({ ...venueForm, yPercent: e.target.value })} />
               </div>
-              <button className="btn-primary" style={{ marginTop: 10 }} onClick={() => void addVenue()} disabled={addingVenue}>
+
+              <div style={{ marginTop: 14 }}>
+                {selectedVenueBuilding?.floorPlanUrl ? (
+                  <ClickableFloorPlan
+                    src={selectedVenueBuilding.floorPlanUrl}
+                    pendingPercent={venuePosition}
+                    onPick={(xPercent, yPercent) => setVenuePosition({ xPercent, yPercent })}
+                    label="Click on the floor plan to mark where this room is"
+                  />
+                ) : (
+                  <p style={{ color: 'var(--text-muted)' }}>Select a building with an uploaded floor plan first</p>
+                )}
+              </div>
+
+              <input
+                placeholder="Directions (optional) — e.g. Take the stairs to floor 2, room is on the left"
+                value={venueForm.directions}
+                onChange={(e) => setVenueForm({ ...venueForm, directions: e.target.value })}
+                style={{ marginTop: 12 }}
+              />
+
+              <button className="btn-primary" style={{ marginTop: 10 }} onClick={() => void addVenue()} disabled={addingVenue || !venueForm.name.trim()}>
                 {addingVenue ? <><span className="spinner" /> Saving...</> : 'Add venue'}
               </button>
             </div>
@@ -392,5 +499,49 @@ export default function CollegeMapSetupPage() {
         )}
       </section>
     </main>
+  )
+}
+
+function ClickableFloorPlan({
+  src,
+  pendingPercent,
+  onPick,
+  label,
+}: {
+  src: string
+  pendingPercent: PositionPercent | null
+  onPick: (xPercent: number, yPercent: number) => void
+  label: string
+}) {
+  const handleClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const xPercent = ((e.clientX - rect.left) / rect.width) * 100
+    const yPercent = ((e.clientY - rect.top) / rect.height) * 100
+    onPick(xPercent, yPercent)
+  }
+
+  return (
+    <div>
+      <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{label}</p>
+      <div style={{ position: 'relative', width: '100%', cursor: 'crosshair', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+        <img src={src} alt="Floor plan" onClick={handleClick} style={{ width: '100%', display: 'block' }} />
+        {pendingPercent && (
+          <div
+            style={{
+              position: 'absolute',
+              left: `${pendingPercent.xPercent}%`,
+              top: `${pendingPercent.yPercent}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              background: 'var(--primary)',
+              border: '2px solid #fff',
+              boxShadow: '0 0 6px rgba(0,0,0,0.4)',
+            }}
+          />
+        )}
+      </div>
+    </div>
   )
 }

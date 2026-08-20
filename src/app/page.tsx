@@ -24,20 +24,20 @@ export default function Home() {
       <div className="blob" style={{
         position: 'absolute', top: '-15%', left: '-10%',
         width: 500, height: 500,
-        background: 'radial-gradient(circle, rgba(255,107,71,0.07) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(var(--primary-rgb),0.07) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
       <div className="blob" style={{
         position: 'absolute', bottom: '-15%', right: '-10%',
         width: 450, height: 450,
-        background: 'radial-gradient(circle, rgba(255,154,108,0.06) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(var(--accent-rgb),0.06) 0%, transparent 70%)',
         pointerEvents: 'none',
         animationDelay: '-3s',
       }} />
       <div style={{
         position: 'absolute', top: '35%', right: '10%',
         width: 280, height: 280,
-        background: 'radial-gradient(circle, rgba(255,212,168,0.04) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(var(--accent-rgb),0.04) 0%, transparent 70%)',
         borderRadius: '50%',
         pointerEvents: 'none',
       }} />
@@ -57,8 +57,8 @@ export default function Home() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(255,107,71,0.1)',
-              border: '1px solid rgba(255,107,71,0.2)',
+              background: 'rgba(var(--primary-rgb),0.1)',
+              border: '1px solid rgba(var(--primary-rgb),0.2)',
               borderRadius: 20,
               padding: '6px 18px',
               fontSize: 12,
@@ -87,19 +87,19 @@ export default function Home() {
             }}
           >
             <span style={{
-              backgroundImage: 'linear-gradient(135deg, #b8461f, #ff6b47)',
+              backgroundImage: 'linear-gradient(135deg, var(--secondary), var(--primary))',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
             }}>Find</span>
             <span style={{
-              backgroundImage: 'linear-gradient(135deg, #ff6b47, #e8511f)',
+              backgroundImage: 'linear-gradient(135deg, var(--primary), var(--secondary))',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
             }}>Ur</span>
             <span style={{
-              backgroundImage: 'linear-gradient(135deg, #ff9a6c, #ff6b47)',
+              backgroundImage: 'linear-gradient(135deg, var(--accent), var(--primary))',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
@@ -120,7 +120,7 @@ export default function Home() {
           >
             Real-time venue updates. AI-powered personal schedules.
             <br />
-            <span style={{ color: 'rgba(255,154,108,0.7)' }}>Never miss your event again.</span>
+            <span style={{ color: 'rgba(var(--accent-rgb),0.7)' }}>Never miss your event again.</span>
           </motion.p>
 
           {/* Buttons */}
@@ -133,11 +133,11 @@ export default function Home() {
             <motion.div whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
               <Link href="/visitor/search" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                background: 'linear-gradient(135deg, #ff6b47, #ff9a6c)',
+                background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
                 color: 'white',
                 padding: '17px 32px', borderRadius: 16,
                 fontSize: 16, fontWeight: 800, textDecoration: 'none',
-                boxShadow: '0 8px 32px rgba(255,107,71,0.35)',
+                boxShadow: '0 8px 32px rgba(var(--primary-rgb),0.35)',
               }}>
                 I&apos;m attending a fest
               </Link>
@@ -146,11 +146,11 @@ export default function Home() {
             <motion.div whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
               <Link href="/college/register" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                background: 'rgba(255,200,160,0.05)',
+                background: 'rgba(var(--accent-rgb),0.05)',
                 color: 'var(--secondary)',
                 padding: '17px 32px', borderRadius: 16,
                 fontSize: 16, fontWeight: 800, textDecoration: 'none',
-                border: '1px solid rgba(255,107,71,0.25)',
+                border: '1px solid rgba(var(--primary-rgb),0.25)',
                 backdropFilter: 'blur(16px)',
               }}>
                 Register my college

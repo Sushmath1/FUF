@@ -83,6 +83,7 @@ model Venue {
   yPercent      Float?
   lat           Float?
   lng           Float?
+  directions    String?
   events        Event[]
   distancesFrom VenueDistance[] @relation("fromVenue")
   distancesTo   VenueDistance[] @relation("toVenue")

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { ok, err, serverErr } from '@/lib/apiHelpers'
-import { anthropic } from '@/lib/anthropic'
+import { getModel, generateWithRetry } from '@/lib/gemini'
 import { prisma } from '@/lib/prisma'
 import { rateLimit, getClientIp } from '@/lib/rateLimit'
 
@@ -47,23 +47,32 @@ export async function POST(request: NextRequest) {
       contact: registration.event.contactName ?? null,
     }))
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      system: `You are a helpful fest navigation assistant for FindUrFest.\nAnswer questions about the visitor's schedule concisely and helpfully.\nOnly answer based on the schedule data provided. If something is not in the schedule, say so honestly.\nKeep answers under 2 sentences. Be friendly and conversational.\nToday's date: ${new Date().toLocaleDateString('en-IN')}`,
-      messages: [
+    const model = getModel('gemini-flash-lite-latest')
+
+    const result = await generateWithRetry(model, {
+      contents: [
         {
           role: 'user',
-          content: `My schedule:\n${JSON.stringify(scheduleContext, null, 2)}\n\nQuestion: ${question}`,
+          parts: [
+            {
+              text: `You are a helpful fest navigation assistant for FindUrFest.
+Answer questions about the visitor's schedule concisely and helpfully.
+Only answer based on the schedule data provided. If something is not in the schedule, say so honestly.
+Keep answers under 2 sentences. Be friendly and conversational.
+Today's date: ${new Date().toLocaleDateString('en-IN')}
+
+My schedule:
+${JSON.stringify(scheduleContext, null, 2)}
+
+Question: ${question}`,
+            },
+          ],
         },
       ],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 150 },
     })
 
-    const first = response.content[0]
-    const answer =
-      first && first.type === 'text'
-        ? first.text
-        : 'Sorry, I could not answer that. Please check your schedule directly.'
+    const answer = result.response.text() || 'Sorry, I could not answer that. Please check your schedule directly.'
 
     return ok({ answer })
   } catch (e) {

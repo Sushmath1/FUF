@@ -9,7 +9,8 @@ import { collegeRegisterSchema } from '@/lib/validations'
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request)
-    if (!rateLimit(`college-register:${ip}`, 5, 3600000).success) {
+    // TEMP: raised from 5 to 50/hour for local testing — revert to 5 before production deployment
+    if (!rateLimit(`college-register:${ip}`, 50, 3600000).success) {
       return err('Too many attempts. Try again later.', 429)
     }
 

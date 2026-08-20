@@ -20,6 +20,7 @@ type ScheduleEvent = {
   venueYPercent: number | null
   entranceXPercent: number | null
   entranceYPercent: number | null
+  venueDirections: string | null
   floor: number | null
   startTime: string
   endTime: string
@@ -112,6 +113,7 @@ export async function GET(request: NextRequest, context: VisitorRouteContext) {
         venueYPercent: event.venue.yPercent,
         entranceXPercent: event.venue.building?.entranceXPercent ?? null,
         entranceYPercent: event.venue.building?.entranceYPercent ?? null,
+        venueDirections: event.venue.directions,
         floor: event.venue.floor,
         startTime: event.startTime.toISOString(),
         endTime: event.endTime.toISOString(),

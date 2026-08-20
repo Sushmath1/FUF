@@ -1,29 +1,22 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
-const THEME_CURSORS: Record<string, string> = {
-  TECH: '⚡',
-  CULTURAL: '🎭',
-  ONAM: '🌼',
-  NEON: '✨',
-  SPACE: '🚀',
-  MINIMAL: '○',
-  CUSTOM: '✦',
-  DEFAULT: '🧡',
-}
-
 interface CustomCursorProps {
-  festTheme?: string
+  // Accepted for callers that know the active preset theme, but the cursor
+  // itself stays a single star across every preset — its glow color already
+  // adapts per-theme via var(--primary) in globals.css, so no per-preset
+  // emoji mapping is needed.
+  presetId?: string
 }
 
-export function CustomCursor({ festTheme = 'DEFAULT' }: CustomCursorProps) {
+export function CustomCursor(_props: CustomCursorProps) {
   const cursorRef = useRef<HTMLDivElement>(null)
   const [isHovering, setIsHovering] = useState(false)
   const [isTouchDevice, setIsTouchDevice] = useState(true) // default true so it doesn't flash on mobile
   const posRef = useRef({ x: -100, y: -100 })
   const rafRef = useRef<number | undefined>(undefined)
 
-  const emoji = THEME_CURSORS[festTheme] ?? THEME_CURSORS.DEFAULT
+  const emoji = '✦'
 
   useEffect(() => {
     // Detect if device has a real mouse (not touch-only)

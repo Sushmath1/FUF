@@ -8,7 +8,9 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 
 import { Navbar } from '@/components/Navbar'
+import { ThemePicker } from '@/components/ThemePicker'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { PRESET_THEMES, type PresetTheme } from '@/lib/presetThemes'
 
 type Venue = { id: string; name: string; building?: { name: string } | null }
 
@@ -62,6 +64,7 @@ export default function CollegeDashboardPage() {
   const [flashIds, setFlashIds] = useState<string[]>([])
   const [error, setError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [showThemeModal, setShowThemeModal] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<Event | null>(null)
   const [stats, setStats] = useState({ eventsToday: 0, totalRegistrations: 0 })
   const [csvText, setCsvText] = useState('')
@@ -77,17 +80,10 @@ export default function CollegeDashboardPage() {
     contactNumber: '',
   })
 
-  const [themeForm, setThemeForm] = useState({
-    themeDescription: '',
-    primaryColor: '#06b6d4',
-    secondaryColor: '#6366f1',
-    accentColor: '#22c55e',
-    bgColor: '#030712',
-    surfaceColor: '#0f172a',
-    fontStyle: 'modern',
-    moodText: 'Your fest. Your schedule.',
-    particleStyle: 'dots',
-  })
+  const currentThemeId = useMemo(
+    () => PRESET_THEMES.find((preset) => preset.primaryColor === college?.primaryColor)?.id,
+    [college?.primaryColor],
+  )
 
   const isActiveFest = useMemo(() => {
     return events.some((event) => new Date(event.endTime) > new Date() && event.status !== 'CANCELLED')
@@ -136,18 +132,6 @@ export default function CollegeDashboardPage() {
         eventsToday: statsData.eventsToday ?? 0,
         totalRegistrations: statsData.totalRegistrations ?? 0,
       })
-      setThemeForm((prev) => ({
-        ...prev,
-        themeDescription: finalCollege.themeDescription ?? prev.themeDescription,
-        primaryColor: finalCollege.primaryColor ?? prev.primaryColor,
-        secondaryColor: finalCollege.secondaryColor ?? prev.secondaryColor,
-        accentColor: finalCollege.accentColor ?? prev.accentColor,
-        bgColor: finalCollege.bgColor ?? prev.bgColor,
-        surfaceColor: finalCollege.surfaceColor ?? prev.surfaceColor,
-        fontStyle: finalCollege.fontStyle ?? prev.fontStyle,
-        moodText: finalCollege.moodText ?? prev.moodText,
-        particleStyle: finalCollege.particleStyle ?? prev.particleStyle,
-      }))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load dashboard')
     } finally {
@@ -234,44 +218,33 @@ export default function CollegeDashboardPage() {
     }
   }
 
-  const generateTheme = async () => {
-    if (!session?.user?.id || !themeForm.themeDescription.trim()) return
-
-    setSaving('theme')
-    try {
-      const response = await fetch('/api/ai/generate-theme', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: themeForm.themeDescription, collegeId: session.user.id }),
-      })
-      const data = (await response.json()) as { theme?: Partial<typeof themeForm>; error?: string }
-      if (!response.ok) throw new Error(data.error ?? 'Theme generation failed')
-      if (data.theme) setThemeForm((prev) => ({ ...prev, ...data.theme }))
-      toast.success('Theme generated')
-    } catch (themeError) {
-      toast.error(themeError instanceof Error ? themeError.message : 'Theme generation failed')
-    } finally {
-      setSaving(null)
-    }
-  }
-
-  const saveTheme = async () => {
+  const handleThemeChange = async (theme: PresetTheme) => {
     if (!session?.user?.id) return
 
-    setSaving('theme-save')
+    setSaving('theme')
     try {
       const response = await fetch(`/api/colleges/${session.user.id}/theme`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(themeForm),
+        body: JSON.stringify({
+          themeDescription: theme.name,
+          primaryColor: theme.primaryColor,
+          secondaryColor: theme.secondaryColor,
+          accentColor: theme.accentColor,
+          bgColor: theme.bgColor,
+          surfaceColor: theme.surfaceColor,
+          fontStyle: theme.fontStyle,
+          moodText: theme.moodText,
+          particleStyle: theme.particleStyle,
+        }),
       })
 
       const data = (await response.json()) as { error?: string }
       if (!response.ok) throw new Error(data.error ?? 'Could not save theme')
-      toast.success('Theme updated')
+      toast.success('Theme updated!')
       await loadData()
-    } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : 'Could not save theme')
+    } catch (themeError) {
+      toast.error(themeError instanceof Error ? themeError.message : 'Could not save theme')
     } finally {
       setSaving(null)
     }
@@ -336,7 +309,7 @@ export default function CollegeDashboardPage() {
             top: 60,
             zIndex: 50,
             backdropFilter: 'blur(12px)',
-            background: 'rgba(3,7,18,0.85)',
+            background: 'rgba(var(--bg-rgb), 0.75)',
             borderBottom: '1px solid var(--border)',
           }}
         >
@@ -347,40 +320,77 @@ export default function CollegeDashboardPage() {
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', letterSpacing: 1.1 }}>LIVE</span>
               )}
             </div>
-            <button className="btn-primary" onClick={() => setShowAdd((prev) => !prev)}>
-              Add event
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                aria-label="Customize theme"
+                title="Customize theme"
+                onClick={() => setShowThemeModal(true)}
+                style={{
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '50%',
+                  width: 40,
+                  height: 40,
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  display: 'grid',
+                  placeItems: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                ⚙️
+              </button>
+              <button
+                className="btn-primary"
+                style={{ padding: '16px 28px', fontSize: 16 }}
+                onClick={() => setShowAdd((prev) => !prev)}
+              >
+                + Add event
+              </button>
+            </div>
           </div>
         </header>
 
-        <div style={{ width: 'min(1180px, 100%)', margin: '0 auto', padding: '16px 20px', display: 'grid', gridTemplateColumns: 'minmax(0,3fr) minmax(0,2fr)', gap: 16 }}>
+        <div className="dashboard-grid" style={{ width: 'min(1180px, 100%)', margin: '0 auto', padding: '16px 20px', display: 'grid', gridTemplateColumns: 'minmax(0,3fr) minmax(0,2fr)', gap: 16 }}>
           <section>
             {error && <p style={{ color: '#ef4444', marginBottom: 10 }}>{error}</p>}
 
             {showAdd && (
               <div className="card" style={{ padding: 14, marginBottom: 12 }}>
                 <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Create event</h3>
-                <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
-                  <input value={newEvent.name} placeholder="Event name" onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })} />
-                  <select value={newEvent.category} onChange={(e) => setNewEvent({ ...newEvent, category: e.target.value })}>
-                    {['TECHNICAL', 'CULTURAL', 'SPORTS', 'WORKSHOP', 'GAMING', 'MUSIC', 'DANCE', 'FOOD', 'OTHER'].map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
-                  <select value={newEvent.venueId} onChange={(e) => setNewEvent({ ...newEvent, venueId: e.target.value })}>
-                    <option value="">Select venue</option>
-                    {venues.map((venue) => (
-                      <option key={venue.id} value={venue.id}>{venue.name}</option>
-                    ))}
-                  </select>
-                  <input type="datetime-local" value={newEvent.startTime} onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })} />
-                  <input type="datetime-local" value={newEvent.endTime} onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })} />
-                  <input value={newEvent.contactName} placeholder="Contact name" onChange={(e) => setNewEvent({ ...newEvent, contactName: e.target.value })} />
-                  <input value={newEvent.contactNumber} placeholder="Contact number" onChange={(e) => setNewEvent({ ...newEvent, contactNumber: e.target.value })} />
-                </div>
-                <button className="btn-primary" style={{ marginTop: 10 }} onClick={() => void addEvent()} disabled={saving === 'new'}>
-                  {saving === 'new' ? <><span className="spinner" /> Saving...</> : 'Save event'}
-                </button>
+                {venues.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)' }}>
+                    No venues yet.{' '}
+                    <Link href="/college/map-setup" style={{ color: 'var(--primary)' }}>
+                      Add a building and venue first from Map Setup
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
+                      <input value={newEvent.name} placeholder="Event name" onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })} />
+                      <select value={newEvent.category} onChange={(e) => setNewEvent({ ...newEvent, category: e.target.value })}>
+                        {['TECHNICAL', 'CULTURAL', 'SPORTS', 'WORKSHOP', 'GAMING', 'MUSIC', 'DANCE', 'FOOD', 'OTHER'].map((item) => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                      <select value={newEvent.venueId} onChange={(e) => setNewEvent({ ...newEvent, venueId: e.target.value })}>
+                        <option value="">Select venue</option>
+                        {venues.map((venue) => (
+                          <option key={venue.id} value={venue.id}>{venue.name}</option>
+                        ))}
+                      </select>
+                      <input type="datetime-local" value={newEvent.startTime} onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })} />
+                      <input type="datetime-local" value={newEvent.endTime} onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })} />
+                      <input value={newEvent.contactName} placeholder="Contact name" onChange={(e) => setNewEvent({ ...newEvent, contactName: e.target.value })} />
+                      <input value={newEvent.contactNumber} placeholder="Contact number" onChange={(e) => setNewEvent({ ...newEvent, contactNumber: e.target.value })} />
+                    </div>
+                    <button className="btn-primary" style={{ marginTop: 10 }} onClick={() => void addEvent()} disabled={saving === 'new' || !newEvent.venueId}>
+                      {saving === 'new' ? <><span className="spinner" /> Saving...</> : 'Save event'}
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -455,32 +465,7 @@ export default function CollegeDashboardPage() {
             )}
           </section>
 
-          <aside style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
-            <div className="card" style={{ padding: 14 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>Theme editor</h3>
-              <textarea
-                rows={3}
-                placeholder="Describe your fest theme"
-                value={themeForm.themeDescription}
-                onChange={(e) => setThemeForm({ ...themeForm, themeDescription: e.target.value })}
-              />
-              <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', marginTop: 8 }}>
-                <label>Primary<input type="color" value={themeForm.primaryColor} onChange={(e) => setThemeForm({ ...themeForm, primaryColor: e.target.value })} /></label>
-                <label>Secondary<input type="color" value={themeForm.secondaryColor} onChange={(e) => setThemeForm({ ...themeForm, secondaryColor: e.target.value })} /></label>
-                <label>Accent<input type="color" value={themeForm.accentColor} onChange={(e) => setThemeForm({ ...themeForm, accentColor: e.target.value })} /></label>
-                <label>Background<input type="color" value={themeForm.bgColor} onChange={(e) => setThemeForm({ ...themeForm, bgColor: e.target.value })} /></label>
-                <label>Surface<input type="color" value={themeForm.surfaceColor} onChange={(e) => setThemeForm({ ...themeForm, surfaceColor: e.target.value })} /></label>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <button className="btn-outline" disabled={saving === 'theme'} onClick={() => void generateTheme()}>
-                  {saving === 'theme' ? <><span className="spinner" /> Generating...</> : 'Generate'}
-                </button>
-                <button className="btn-primary" disabled={saving === 'theme-save'} onClick={() => void saveTheme()}>
-                  {saving === 'theme-save' ? <><span className="spinner" /> Saving...</> : 'Save theme'}
-                </button>
-              </div>
-            </div>
-
+          <aside className="dashboard-aside" style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
             <div className="card" style={{ padding: 14 }}>
               <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>Upload attendee list</h3>
               <textarea
@@ -489,7 +474,7 @@ export default function CollegeDashboardPage() {
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
               />
-              <button className="btn-primary" style={{ marginTop: 10 }} disabled={uploadingCsv || !csvText.trim()} onClick={() => void uploadCsv()}>
+              <button className="btn-outline" style={{ marginTop: 10, width: '100%' }} disabled={uploadingCsv || !csvText.trim()} onClick={() => void uploadCsv()}>
                 {uploadingCsv ? <><span className="spinner" /> Uploading...</> : 'Upload CSV'}
               </button>
             </div>
@@ -505,6 +490,55 @@ export default function CollegeDashboardPage() {
             </Link>
           </aside>
         </div>
+
+        {showThemeModal && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(2,6,23,0.7)',
+              display: 'grid',
+              placeItems: 'center',
+              zIndex: 150,
+              padding: 20,
+            }}
+            onClick={() => setShowThemeModal(false)}
+          >
+            <div
+              className="card"
+              style={{ width: 'min(480px, 100%)', padding: 24, maxHeight: '85vh', overflowY: 'auto' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <p style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', fontWeight: 800, color: 'var(--text-muted)' }}>
+                  Customize theme
+                </p>
+                <button
+                  aria-label="Close"
+                  onClick={() => setShowThemeModal(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Current theme</p>
+              <ThemeSwatches
+                colors={[college?.primaryColor, college?.secondaryColor, college?.accentColor, college?.bgColor, college?.surfaceColor]}
+              />
+              {college?.moodText && (
+                <p style={{ marginTop: 6, marginBottom: 16, fontSize: 13, color: 'var(--text-muted)' }}>{college.moodText}</p>
+              )}
+
+              <ThemePicker initialThemeId={currentThemeId} onSelect={(theme) => void handleThemeChange(theme)} />
+              {saving === 'theme' && (
+                <p style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  <span className="spinner" /> Saving theme...
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {cancelTarget && (
           <div
@@ -539,7 +573,36 @@ export default function CollegeDashboardPage() {
           </div>
         )}
       </main>
+
+      <style jsx>{`
+        @media (max-width: 640px) {
+          .dashboard-grid {
+            grid-template-columns: 1fr !important;
+            padding: 16px !important;
+          }
+          .dashboard-aside {
+            justify-items: center;
+            text-align: center;
+          }
+          .dashboard-aside .card {
+            width: 100%;
+          }
+        }
+      `}</style>
     </ThemeProvider>
+  )
+}
+
+function ThemeSwatches({ colors }: { colors: Array<string | null | undefined> }) {
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {colors.map((color, i) => (
+        <span
+          key={i}
+          style={{ width: 28, height: 28, borderRadius: 6, background: color ?? 'var(--surface2)', border: '1px solid var(--border)' }}
+        />
+      ))}
+    </div>
   )
 }
 

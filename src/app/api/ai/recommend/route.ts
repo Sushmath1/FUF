@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
 import { ok, err, serverErr } from '@/lib/apiHelpers'
-import { anthropic } from '@/lib/anthropic'
+import { getModel, generateWithRetry } from '@/lib/gemini'
 import { prisma } from '@/lib/prisma'
 import { rateLimit, getClientIp } from '@/lib/rateLimit'
 
@@ -75,49 +75,43 @@ export async function POST(request: NextRequest) {
     const candidates = others.filter(fitsInGap)
     if (candidates.length === 0) return ok({ recommendations: [] })
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
-      tools: [
-        {
-          name: 'rank_recommendations',
-          description: 'Rank candidate events by relevance to visitor existing registrations',
-          input_schema: {
-            type: 'object',
-            properties: {
-              recommendations: {
-                type: 'array',
-                maxItems: 3,
-                items: {
-                  type: 'object',
-                  properties: {
-                    eventId: { type: 'string' },
-                    reason: {
-                      type: 'string',
-                      description: 'Short reason - similar to X or fits between Y and Z',
-                    },
-                  },
-                  required: ['eventId', 'reason'],
-                },
-              },
-            },
-            required: ['recommendations'],
-          },
-        },
-      ],
-      tool_choice: { type: 'tool', name: 'rank_recommendations' },
-      messages: [
+    const model = getModel('gemini-flash-lite-latest')
+
+    const result = await generateWithRetry(model, {
+      contents: [
         {
           role: 'user',
-          content: `Visitor is attending: ${registered.map((registration) => registration.event.name).join(', ') || 'no events yet'}\n\nEvents that fit in their free time slots:\n${JSON.stringify(candidates.map((candidate) => ({ id: candidate.id, name: candidate.name, category: candidate.category, venue: candidate.venue.name })))}\n\nPick top 3 most relevant. Give a short reason for each.`,
+          parts: [
+            {
+              text: `Visitor is attending: ${registered.map((registration) => registration.event.name).join(', ') || 'no events yet'}
+
+Events that fit in their free time slots:
+${JSON.stringify(candidates.map((candidate) => ({ id: candidate.id, name: candidate.name, category: candidate.category, venue: candidate.venue.name })))}
+
+Pick top 3 most relevant. Give a short reason for each.
+
+Respond ONLY with valid JSON in exactly this shape, no markdown, no extra text:
+{
+  "recommendations": [
+    { "eventId": "id", "reason": "short reason" }
+  ]
+}
+Maximum 3 items in the array.`,
+            },
+          ],
         },
       ],
+      generationConfig: { temperature: 0.6, responseMimeType: 'application/json' },
     })
 
-    const toolResult = response.content.find((block) => block.type === 'tool_use')
-    if (!toolResult || toolResult.type !== 'tool_use') return ok({ recommendations: [] })
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(result.response.text())
+    } catch {
+      return ok({ recommendations: [] })
+    }
 
-    const payload = toolResult.input as { recommendations?: unknown }
+    const payload = parsed as { recommendations?: unknown }
     if (!isRecommendationList(payload.recommendations)) return ok({ recommendations: [] })
 
     const enriched = payload.recommendations

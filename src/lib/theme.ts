@@ -15,19 +15,32 @@ export interface ThemeColors {
 }
 
 export const DEFAULT_THEME: ThemeColors = {
-  primary: '#06b6d4',
-  secondary: '#6366f1',
-  accent: '#22c55e',
-  background: '#030712',
-  surface: '#0f172a',
-  text: '#f1f5f9',
-  textMuted: '#64748b',
-  border: '#1e293b',
-  gradient: 'linear-gradient(135deg, #030712 0%, #0f172a 50%, #030712 100%)',
-  glowColor: 'rgba(6,182,212,0.3)',
+  primary: '#be185d',
+  secondary: '#831843',
+  accent: '#f472b6',
+  background: '#150810',
+  surface: '#200a15',
+  text: '#fce7f3',
+  textMuted: 'rgba(252, 231, 243, 0.5)',
+  border: 'rgba(244, 114, 182, 0.15)',
+  gradient: 'linear-gradient(135deg, #150810 0%, #200a15 50%, #150810 100%)',
+  glowColor: 'rgba(190, 24, 93, 0.3)',
   fontFamily: '"Inter", sans-serif',
   moodText: 'Your fest. Your schedule.',
   particleStyle: 'dots',
+}
+
+// Standard WCAG relative luminance — picks readable text over whatever
+// background a college (or the AI theme generator) ends up choosing,
+// since bgColor isn't guaranteed to be light or dark.
+function relativeLuminance(hex: string): number {
+  const clean = hex.replace('#', '')
+  if (clean.length !== 6) return 1
+
+  const channels = [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16) / 255)
+  const [r, g, b] = channels.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 export function buildThemeFromCollege(college: {
@@ -45,6 +58,7 @@ export function buildThemeFromCollege(college: {
   const accent = college.accentColor ?? DEFAULT_THEME.accent
   const background = college.bgColor ?? DEFAULT_THEME.background
   const surface = college.surfaceColor ?? DEFAULT_THEME.surface
+  const isLightBg = relativeLuminance(background) > 0.5
 
   const fontMap: Record<string, string> = {
     monospace: '"JetBrains Mono", monospace',
@@ -61,8 +75,8 @@ export function buildThemeFromCollege(college: {
     accent,
     background,
     surface,
-    text: '#f1f5f9',
-    textMuted: '#64748b',
+    text: isLightBg ? '#3d2817' : '#f1f5f9',
+    textMuted: isLightBg ? 'rgba(61, 40, 23, 0.55)' : '#64748b',
     border: surface,
     gradient: `linear-gradient(135deg, ${background} 0%, ${surface} 50%, ${background} 100%)`,
     glowColor: `${primary}4d`,
