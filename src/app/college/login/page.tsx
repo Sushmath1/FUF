@@ -2,19 +2,17 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
 import { useState } from 'react'
 
 import { Navbar } from '@/components/Navbar'
 import { ParticleBackground } from '@/components/ParticleBackground'
+import { credentialsSignIn } from '@/lib/credentialsSignIn'
 
 export default function CollegeLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -25,14 +23,20 @@ export default function CollegeLogin() {
     setLoading(true)
     setError('')
 
-    const result = await signIn('college', { email, password, redirect: false })
+    const result = await credentialsSignIn('college', email, password, `${window.location.origin}/college/dashboard`)
 
-    setLoading(false)
-    if (result?.error) {
+    if (!result.ok) {
+      setLoading(false)
       setError('Incorrect email or password')
-    } else {
-      router.push('/college/dashboard')
+      return
     }
+
+    // A client-side router.push() here can outrace next-auth's own session-cache
+    // update: the dashboard reads useSession() on that very first render, still
+    // sees the pre-login "unauthenticated" state, and immediately bounces back
+    // to this page even though the login itself succeeded. A hard navigation
+    // forces a fresh load that picks up the just-set session cookie from the start.
+    window.location.href = '/college/dashboard'
   }
 
   return (

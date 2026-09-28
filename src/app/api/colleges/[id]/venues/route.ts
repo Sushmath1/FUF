@@ -14,7 +14,13 @@ export async function GET(_: NextRequest, context: CollegeRouteContext) {
     const venues = await prisma.venue.findMany({
       where: { collegeId: id },
       include: {
-        building: { select: { id: true, name: true } },
+        floor: {
+          select: {
+            id: true,
+            floorNumber: true,
+            building: { select: { id: true, name: true, shortName: true } },
+          },
+        },
         events: {
           where: {
             status: { in: ['SCHEDULED', 'CHANGED'] },
@@ -25,7 +31,7 @@ export async function GET(_: NextRequest, context: CollegeRouteContext) {
           orderBy: { startTime: 'asc' },
         },
       },
-      orderBy: [{ building: { name: 'asc' } }, { name: 'asc' }],
+      orderBy: [{ name: 'asc' }],
     })
 
     return ok({ venues })

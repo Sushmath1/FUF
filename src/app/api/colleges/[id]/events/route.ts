@@ -23,7 +23,16 @@ export async function GET(request: NextRequest, context: CollegeRouteContext) {
         ...(validCategory ? { category: validCategory } : {}),
       },
       include: {
-        venue: { include: { building: { select: { name: true, lat: true, lng: true } } } },
+        venue: {
+          include: {
+            floor: {
+              select: {
+                floorNumber: true,
+                building: { select: { name: true, lat: true, lng: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { startTime: 'asc' },
     })

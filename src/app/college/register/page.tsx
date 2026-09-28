@@ -186,6 +186,7 @@ export default function CollegeRegisterPage() {
           fontStyle: theme.fontStyle,
           moodText: theme.moodText,
           particleStyle: theme.particleStyle,
+          mapImageUrl: mapPreview || undefined,
         }),
       })
 

@@ -4,13 +4,14 @@ import confetti from 'canvas-confetti'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 
 import { Navbar } from '@/components/Navbar'
 import { ParticleBackground } from '@/components/ParticleBackground'
 import { ThemeProvider } from '@/components/ThemeProvider'
-import { getOrCreateGuestId } from '@/lib/guestSession'
+import { COLLEGE_ID_KEY, getOrCreateGuestId } from '@/lib/guestSession'
 
 type College = {
   id: string
@@ -57,6 +58,7 @@ const categoryIcons: Record<string, string> = {
 export default function VisitorCollegePage() {
   const params = useParams<{ id: string }>()
   const collegeId = params.id
+  const { data: session } = useSession()
 
   const [college, setCollege] = useState<College | null>(null)
   const [events, setEvents] = useState<Event[]>([])
@@ -103,20 +105,39 @@ export default function VisitorCollegePage() {
     setResult(null)
 
     try {
-      const guestSessionId = getOrCreateGuestId()
-      const response = await fetch('/api/visitors/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          collegeId,
-          email: email || undefined,
-          phone: phone || undefined,
-          guestSessionId,
-        }),
-      })
+      // Must match whichever identity the schedule page will look this registration up
+      // by: a logged-in visitor's real account id, or their guest id otherwise. Always
+      // sending guestSessionId here — even for a logged-in visitor — was the bug: the
+      // registration would be saved under a guest id nothing on the schedule page ever
+      // queries again once that visitor is signed in, so it looked like verification
+      // silently did nothing.
+      const submitVerify = async (identity: { visitorId: string } | { guestSessionId: string }) => {
+        const response = await fetch('/api/visitors/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collegeId, email: email || undefined, phone: phone || undefined, ...identity }),
+        })
+        const data = (await response.json()) as { found?: number; events?: VerifiedEvent[]; error?: string; message?: string }
+        return { response, data }
+      }
 
-      const data = (await response.json()) as { found?: number; events?: VerifiedEvent[]; error?: string; message?: string }
+      const visitorId = session?.user?.id
+      let { response, data } = await submitVerify(visitorId ? { visitorId } : { guestSessionId: getOrCreateGuestId() })
+
+      // This page must always work with zero login. A stale login cookie whose
+      // account has since been deleted still resolves to a visitorId here, and the
+      // API correctly rejects that id as invalid — but a guest browsing this page
+      // never asked to log in, so silently retry as a guest instead of surfacing
+      // that as a scary "session invalid" error.
+      if (!response.ok && response.status === 401 && visitorId) {
+        ;({ response, data } = await submitVerify({ guestSessionId: getOrCreateGuestId() }))
+      }
+
       if (!response.ok) throw new Error(data.error ?? 'Verification failed')
+
+      // So "Navigate to campus" on the schedule page never has to ask for a college
+      // id — it's known the moment a visitor successfully verifies here.
+      localStorage.setItem(COLLEGE_ID_KEY, collegeId)
 
       const found = data.found ?? 0
       const verifiedEvents = data.events ?? []

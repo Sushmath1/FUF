@@ -2,19 +2,17 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
 import { useState } from 'react'
 
 import { Navbar } from '@/components/Navbar'
 import { ParticleBackground } from '@/components/ParticleBackground'
+import { credentialsSignIn } from '@/lib/credentialsSignIn'
 
 export default function VisitorLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -25,15 +23,17 @@ export default function VisitorLogin() {
     setLoading(true)
     setError('')
 
-    const result = await signIn('visitor', { email, password, redirect: false })
+    const result = await credentialsSignIn('visitor', email, password, `${window.location.origin}/visitor/schedule`)
 
-    setLoading(false)
-    if (result?.error) {
+    if (!result.ok) {
+      setLoading(false)
       setError('Incorrect email or password')
       return
     }
 
-    router.push('/visitor/schedule')
+    // Hard navigation, not router.push: avoids racing next-auth's session-cache
+    // update on the destination page (see college/login for the full explanation).
+    window.location.href = '/visitor/schedule'
   }
 
   return (

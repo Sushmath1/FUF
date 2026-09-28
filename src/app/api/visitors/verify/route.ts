@@ -26,6 +26,17 @@ export async function POST(request: NextRequest) {
     const { visitorId, guestSessionId } = body
     if (!visitorId && !guestSessionId) return err('Session required', 400)
 
+    // A visitorId can outlive the Visitor row it points to (e.g. the account was
+    // removed after the browser already had a signed-in session) — the FK on
+    // Registration.visitorId would then reject every insert.
+    if (visitorId) {
+      const visitorExists = await prisma.visitor.findUnique({ where: { id: visitorId }, select: { id: true } })
+      if (!visitorExists) return err('Your session is no longer valid. Please sign in again.', 401)
+    }
+
+    // Same normalization as the CSV upload route: lowercase+trim email, strip to
+    // the last 10 digits of phone — so a row saved by one and looked up by the
+    // other always agree on what the "same" email/phone means.
     const normalizedEmail = email?.toLowerCase().trim()
     const normalizedPhone = phone?.replace(/\D/g, '').slice(-10)
 
@@ -33,8 +44,13 @@ export async function POST(request: NextRequest) {
     if (normalizedEmail) orConds.push({ email: normalizedEmail })
     if (normalizedPhone) orConds.push({ phone: normalizedPhone })
 
+    // No `matched: false` filter — matched is purely informational now. Gating the
+    // lookup on it meant a visitor could only ever successfully verify once: the
+    // first call flipped their entries to matched:true, and every retry, refresh,
+    // or second device came back "no registrations found" even though they really
+    // were registered. Verifying must work an unlimited number of times.
     const entries = await prisma.preRegisteredEntry.findMany({
-      where: { collegeId, matched: false, OR: orConds },
+      where: { collegeId, OR: orConds },
     })
 
     if (entries.length === 0) {
@@ -45,52 +61,48 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const registeredEvents: Array<{
-      id: string
-      name: string
-      category: string
-      venueName: string
-      buildingName: string | null
-      startTime: string
-      endTime: string
-      contactName: string | null
-      contactNumber: string | null
-    }> = []
+    const uniqueEventIds = [...new Set(entries.map((entry) => entry.eventId))]
 
-    for (const entry of entries) {
-      try {
-        await prisma.registration.create({
-          data: {
-            eventId: entry.eventId,
-            collegeId,
-            ...(visitorId ? { visitorId } : { guestSessionId }),
-          },
-        })
+    // createMany + skipDuplicates makes this idempotent: creating a registration
+    // that already exists for this exact visitor/guest + event is silently skipped
+    // rather than throwing, so re-verifying never fails because "you're already
+    // registered" — that's a success, not an error.
+    await prisma.registration.createMany({
+      data: uniqueEventIds.map((eventId) => ({
+        eventId,
+        collegeId,
+        ...(visitorId ? { visitorId } : { guestSessionId }),
+      })),
+      skipDuplicates: true,
+    })
 
-        await prisma.preRegisteredEntry.update({ where: { id: entry.id }, data: { matched: true } })
+    await prisma.preRegisteredEntry.updateMany({
+      where: { id: { in: entries.map((entry) => entry.id) } },
+      data: { matched: true },
+    })
 
-        const event = await prisma.event.findUnique({
-          where: { id: entry.eventId },
-          include: { venue: { include: { building: true } } },
-        })
+    // Always return the full set of the person's events — whether this call just
+    // created the registrations or they already existed from an earlier verify.
+    const events = await prisma.event.findMany({
+      where: { id: { in: uniqueEventIds } },
+      include: { venue: { include: { floor: { include: { building: true } } } } },
+    })
+    const eventById = new Map(events.map((event) => [event.id, event]))
 
-        if (event) {
-          registeredEvents.push({
-            id: event.id,
-            name: event.name,
-            category: event.category,
-            venueName: event.venue.name,
-            buildingName: event.venue.building?.name ?? null,
-            startTime: event.startTime.toISOString(),
-            endTime: event.endTime.toISOString(),
-            contactName: event.contactName,
-            contactNumber: event.contactNumber,
-          })
-        }
-      } catch {
-        // Ignore duplicate registration attempts.
-      }
-    }
+    const registeredEvents = uniqueEventIds
+      .map((eventId) => eventById.get(eventId))
+      .filter((event): event is NonNullable<typeof event> => Boolean(event))
+      .map((event) => ({
+        id: event.id,
+        name: event.name,
+        category: event.category,
+        venueName: event.venue.name,
+        buildingName: event.venue.floor?.building?.name ?? null,
+        startTime: event.startTime.toISOString(),
+        endTime: event.endTime.toISOString(),
+        contactName: event.contactName,
+        contactNumber: event.contactNumber,
+      }))
 
     return ok({ found: registeredEvents.length, events: registeredEvents })
   } catch (e) {

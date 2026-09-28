@@ -14,15 +14,24 @@ export async function GET(_: NextRequest, context: CollegeRouteContext) {
     const buildings = await prisma.building.findMany({
       where: { collegeId: id },
       include: {
-        venues: {
+        floors: {
           select: {
             id: true,
-            name: true,
-            floor: true,
-            xPercent: true,
-            yPercent: true,
-            capacity: true,
+            floorNumber: true,
+            floorPlanUrl: true,
+            entranceXPercent: true,
+            entranceYPercent: true,
+            venues: {
+              select: {
+                id: true,
+                name: true,
+                xPercent: true,
+                yPercent: true,
+                capacity: true,
+              },
+            },
           },
+          orderBy: { floorNumber: 'asc' },
         },
       },
       orderBy: { name: 'asc' },

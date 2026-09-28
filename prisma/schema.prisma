@@ -54,30 +54,39 @@ model CollegeAccount {
 }
 
 model Building {
-  id               String   @id @default(cuid())
-  collegeId        String
-  college          College  @relation(fields: [collegeId], references: [id])
-  name             String
-  shortName        String?
-  lat              Float?
-  lng              Float?
-  floorPlanUrl     String?
+  id        String   @id @default(cuid())
+  collegeId String
+  college   College  @relation(fields: [collegeId], references: [id])
+  name      String
+  shortName String?
+  lat       Float?
+  lng       Float?
+  xPercent  Float?
+  yPercent  Float?
+  floors    Floor[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Floor {
+  id           String   @id @default(cuid())
+  buildingId   String
+  building     Building @relation(fields: [buildingId], references: [id])
+  floorNumber  Int
+  floorPlanUrl String
   entranceXPercent Float?
   entranceYPercent Float?
-  floors           Int      @default(1)
-  venues           Venue[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  venues       Venue[]
+  createdAt    DateTime @default(now())
 }
 
 model Venue {
   id            String        @id @default(cuid())
   collegeId     String
   college       College       @relation(fields: [collegeId], references: [id])
-  buildingId    String?
-  building      Building?     @relation(fields: [buildingId], references: [id])
+  floorId       String?
+  floor         Floor?        @relation(fields: [floorId], references: [id])
   name          String
-  floor         Int?          @default(1)
   capacity      Int?
   xPercent      Float?
   yPercent      Float?

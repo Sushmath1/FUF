@@ -10,19 +10,65 @@ import toast from 'react-hot-toast'
 import { Navbar } from '@/components/Navbar'
 import { ThemePicker } from '@/components/ThemePicker'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { floorLabel } from '@/lib/floorLabel'
 import { PRESET_THEMES, type PresetTheme } from '@/lib/presetThemes'
 
-type Venue = { id: string; name: string; building?: { name: string } | null }
+type VenueLocation = { floorNumber: number; building?: { name: string; shortName?: string | null } | null } | null
+
+type Venue = { id: string; name: string; floor?: VenueLocation }
 
 type Event = {
   id: string
   name: string
   category: string
   venueId: string
-  venue: { name: string; building?: { name?: string | null } | null }
+  venue: { name: string; floor?: VenueLocation }
   startTime: string
   endTime: string
   status: 'SCHEDULED' | 'CHANGED' | 'CANCELLED'
+}
+
+function venueLabel(venue: { name: string; floor?: VenueLocation }) {
+  const buildingName = venue.floor?.building?.shortName ?? venue.floor?.building?.name
+  if (!buildingName || !venue.floor) return venue.name
+  return `${venue.name} — ${buildingName}, ${floorLabel(venue.floor.floorNumber)}`
+}
+
+// A plain `line.split(',')` breaks on CSV-quoted fields (e.g. `"Doe, John"`,
+// or any field Excel/Sheets decided to wrap in quotes on export) — it leaves
+// the quote characters embedded in the value instead of treating them as
+// delimiters. This walks the line char-by-char per the CSV quoting rules:
+// a doubled `""` inside quotes is a literal quote, anything else in quotes
+// (including commas) is literal text, and quotes outside a field just open it.
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+
+    if (inQuotes) {
+      if (char === '"' && line[i + 1] === '"') {
+        current += '"'
+        i++
+      } else if (char === '"') {
+        inQuotes = false
+      } else {
+        current += char
+      }
+    } else if (char === '"') {
+      inQuotes = true
+    } else if (char === ',') {
+      cells.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+
+  cells.push(current)
+  return cells
 }
 
 type College = {
@@ -67,8 +113,8 @@ export default function CollegeDashboardPage() {
   const [showThemeModal, setShowThemeModal] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<Event | null>(null)
   const [stats, setStats] = useState({ eventsToday: 0, totalRegistrations: 0 })
-  const [csvText, setCsvText] = useState('')
   const [uploadingCsv, setUploadingCsv] = useState(false)
+  const [csvUploadResult, setCsvUploadResult] = useState<{ fileName: string; matched: number; unmatchedCount: number } | null>(null)
 
   const [newEvent, setNewEvent] = useState({
     name: '',
@@ -188,12 +234,27 @@ export default function CollegeDashboardPage() {
   const addEvent = async () => {
     if (!session?.user?.id) return
 
+    const start = new Date(newEvent.startTime)
+    const end = new Date(newEvent.endTime)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      toast.error('Please choose both a start and end time')
+      return
+    }
+
     setSaving('new')
     try {
       const response = await fetch(`/api/colleges/${session.user.id}/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEvent),
+        body: JSON.stringify({
+          name: newEvent.name,
+          category: newEvent.category,
+          venueId: newEvent.venueId,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          contactName: newEvent.contactName.trim() || undefined,
+          contactNumber: newEvent.contactNumber.trim() || undefined,
+        }),
       })
 
       const data = (await response.json()) as { error?: string }
@@ -250,44 +311,69 @@ export default function CollegeDashboardPage() {
     }
   }
 
-  const uploadCsv = async () => {
-    if (!session?.user?.id || !csvText.trim()) return
+  const handleCsvFileUpload = (file: File | null) => {
+    if (!file || !session?.user?.id) return
 
     setUploadingCsv(true)
 
-    try {
-      const [header, ...rows] = csvText.trim().split(/\r?\n/)
-      const columns = header.split(',').map((item) => item.trim().toLowerCase())
-      const eventIndex = columns.indexOf('eventname')
-      const emailIndex = columns.indexOf('email')
-      const phoneIndex = columns.indexOf('phone')
+    const reader = new FileReader()
 
-      if (eventIndex === -1) throw new Error('CSV must contain eventName column')
+    reader.onload = async () => {
+      try {
+        // Excel/Sheets exports routinely wrap fields in quotes (and prepend a UTF-8
+        // BOM) — a plain row.split(',') left the quote characters embedded in every
+        // value. That didn't just break event-name matching (visible as "unmatched"),
+        // it could also save an email/phone with literal quotes baked in while the
+        // event name still matched fine, so the upload reported success but no real
+        // visitor's plain-text email would ever match it again at verify time.
+        const text = String(reader.result ?? '').replace(/^﻿/, '')
+        const [header, ...rows] = text.trim().split(/\r?\n/)
+        const columns = parseCsvLine(header).map((item) => item.trim().toLowerCase())
+        const eventIndex = columns.indexOf('eventname')
+        const emailIndex = columns.indexOf('email')
+        const phoneIndex = columns.indexOf('phone')
 
-      const entries = rows
-        .map((row) => row.split(',').map((cell) => cell.trim()))
-        .map((cells) => ({
-          eventName: cells[eventIndex] ?? '',
-          email: emailIndex >= 0 ? cells[emailIndex] : '',
-          phone: phoneIndex >= 0 ? cells[phoneIndex] : '',
-        }))
+        if (eventIndex === -1) throw new Error('CSV must contain eventName column')
 
-      const response = await fetch(`/api/colleges/${session.user.id}/preregistered`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries }),
-      })
+        const entries = rows
+          .filter((row) => row.trim())
+          .map((row) => parseCsvLine(row).map((cell) => cell.trim()))
+          .map((cells) => ({
+            eventName: cells[eventIndex] ?? '',
+            email: emailIndex >= 0 ? cells[emailIndex] : '',
+            phone: phoneIndex >= 0 ? cells[phoneIndex] : '',
+          }))
 
-      const data = (await response.json()) as { matched?: number; error?: string }
-      if (!response.ok) throw new Error(data.error ?? 'Upload failed')
+        const response = await fetch(`/api/colleges/${session.user.id}/preregistered`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries }),
+        })
 
-      toast.success(`Uploaded ${data.matched ?? 0} matched entries`)
-      setCsvText('')
-    } catch (csvError) {
-      toast.error(csvError instanceof Error ? csvError.message : 'Upload failed')
-    } finally {
+        const data = (await response.json()) as { matched?: number; unmatched?: string[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'Upload failed')
+
+        const unmatchedCount = data.unmatched?.length ?? 0
+        setCsvUploadResult({ fileName: file.name, matched: data.matched ?? 0, unmatchedCount })
+        toast.success(
+          unmatchedCount > 0
+            ? `Uploaded ${data.matched ?? 0} matched entries (${unmatchedCount} event name${unmatchedCount === 1 ? '' : 's'} not found)`
+            : `Uploaded ${data.matched ?? 0} matched entries`,
+        )
+      } catch (csvError) {
+        setCsvUploadResult(null)
+        toast.error(csvError instanceof Error ? csvError.message : 'Upload failed')
+      } finally {
+        setUploadingCsv(false)
+      }
+    }
+
+    reader.onerror = () => {
+      toast.error('Could not read the file')
       setUploadingCsv(false)
     }
+
+    reader.readAsText(file)
   }
 
   if (loading) {
@@ -303,19 +389,22 @@ export default function CollegeDashboardPage() {
       <main style={{ minHeight: '100vh', background: 'var(--gradient)', paddingBottom: 40 }}>
         <Navbar role="college" />
 
+        {/* Solid, fully opaque — a translucent/blurred background here means whatever
+            scrolls underneath (the CSV upload card, event list, etc.) stays partly
+            visible and blurred through the header instead of being properly hidden
+            behind it. No backdrop-filter, no alpha channel, just var(--bg). */}
         <header
           style={{
             position: 'sticky',
             top: 60,
             zIndex: 50,
-            backdropFilter: 'blur(12px)',
-            background: 'rgba(var(--bg-rgb), 0.75)',
+            background: 'var(--bg)',
             borderBottom: '1px solid var(--border)',
           }}
         >
           <div style={{ width: 'min(1180px, 100%)', margin: '0 auto', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div>
-              <h1 style={{ fontSize: 30, fontWeight: 900 }}>{college?.festName}</h1>
+              <h1 style={{ fontSize: 30, fontWeight: 900, color: 'var(--text)' }}>{college?.festName}</h1>
               {isActiveFest && (
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', letterSpacing: 1.1 }}>LIVE</span>
               )}
@@ -351,7 +440,18 @@ export default function CollegeDashboardPage() {
           </div>
         </header>
 
-        <div className="dashboard-grid" style={{ width: 'min(1180px, 100%)', margin: '0 auto', padding: '16px 20px', display: 'grid', gridTemplateColumns: 'minmax(0,3fr) minmax(0,2fr)', gap: 16 }}>
+        <div
+          className="dashboard-grid"
+          style={{
+            width: 'min(1180px, 100%)',
+            margin: '0 auto',
+            padding: '28px 20px 16px',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0,3fr) minmax(0,2fr)',
+            alignItems: 'start',
+            gap: 16,
+          }}
+        >
           <section>
             {error && <p style={{ color: '#ef4444', marginBottom: 10 }}>{error}</p>}
 
@@ -378,7 +478,7 @@ export default function CollegeDashboardPage() {
                       <select value={newEvent.venueId} onChange={(e) => setNewEvent({ ...newEvent, venueId: e.target.value })}>
                         <option value="">Select venue</option>
                         {venues.map((venue) => (
-                          <option key={venue.id} value={venue.id}>{venue.name}</option>
+                          <option key={venue.id} value={venue.id}>{venueLabel(venue)}</option>
                         ))}
                       </select>
                       <input type="datetime-local" value={newEvent.startTime} onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })} />
@@ -395,7 +495,23 @@ export default function CollegeDashboardPage() {
             )}
 
             {events.length === 0 ? (
-              <div className="card" style={{ padding: 16 }}>No events yet - add your first event.</div>
+              <div
+                className="card"
+                style={{
+                  padding: '48px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  gap: 10,
+                }}
+              >
+                <span style={{ fontSize: 40 }} aria-hidden="true">📅</span>
+                <h3 style={{ fontSize: 20, fontWeight: 800 }}>No events yet</h3>
+                <p style={{ color: 'var(--text-muted)', maxWidth: 320 }}>
+                  Use the + Add event button at the top to get started. Your events will show up here with their venue, timing, and status.
+                </p>
+              </div>
             ) : (
               Object.entries(groupedByDay).map(([day, dayEvents]) => (
                 <div key={day} style={{ marginBottom: 12 }}>
@@ -414,7 +530,7 @@ export default function CollegeDashboardPage() {
                             {categoryIcons[event.category] ?? 'Event'} {event.name}
                           </h3>
                           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-                            {event.venue.name} | {new Date(event.startTime).toLocaleString('en-IN')}
+                            {venueLabel(event.venue)} | {new Date(event.startTime).toLocaleString('en-IN')}
                           </p>
                         </div>
                         <StatusBadge status={event.status} />
@@ -427,7 +543,7 @@ export default function CollegeDashboardPage() {
                           disabled={saving === event.id}
                         >
                           {venues.map((venue) => (
-                            <option key={venue.id} value={venue.id}>{venue.name}</option>
+                            <option key={venue.id} value={venue.id}>{venueLabel(venue)}</option>
                           ))}
                         </select>
 
@@ -468,15 +584,38 @@ export default function CollegeDashboardPage() {
           <aside className="dashboard-aside" style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
             <div className="card" style={{ padding: 14 }}>
               <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>Upload attendee list</h3>
-              <textarea
-                rows={6}
-                placeholder="Paste CSV data with headers: eventName,email,phone"
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                Upload registration CSV file
+              </label>
+              <input
+                type="file"
+                accept=".csv"
+                disabled={uploadingCsv}
+                onChange={(e) => {
+                  handleCsvFileUpload(e.target.files?.[0] ?? null)
+                  // Reset so re-selecting the same file still fires onChange — the native
+                  // input's own "filename chosen" display resets right along with it, which
+                  // looked like nothing had happened, so upload state is tracked separately
+                  // in csvUploadResult below instead of relying on that display.
+                  e.target.value = ''
+                }}
               />
-              <button className="btn-outline" style={{ marginTop: 10, width: '100%' }} disabled={uploadingCsv || !csvText.trim()} onClick={() => void uploadCsv()}>
-                {uploadingCsv ? <><span className="spinner" /> Uploading...</> : 'Upload CSV'}
-              </button>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                File must have columns: eventName, email, phone (phone optional if email provided, and vice versa)
+              </p>
+              {uploadingCsv && (
+                <p style={{ marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>
+                  <span className="spinner" /> Uploading...
+                </p>
+              )}
+              {!uploadingCsv && csvUploadResult && (
+                <p style={{ marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>
+                  ✓ Uploaded <strong style={{ color: 'var(--text)' }}>{csvUploadResult.fileName}</strong> — {csvUploadResult.matched} matched
+                  {csvUploadResult.unmatchedCount > 0
+                    ? `, ${csvUploadResult.unmatchedCount} event name${csvUploadResult.unmatchedCount === 1 ? '' : 's'} not found`
+                    : ''}
+                </p>
+              )}
             </div>
 
             <div className="card" style={{ padding: 14 }}>

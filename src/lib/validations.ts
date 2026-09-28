@@ -20,6 +20,11 @@ export const collegeRegisterSchema = z.object({
   fontStyle: z.enum(['modern', 'serif', 'monospace', 'futuristic', 'traditional']).optional(),
   moodText: z.string().max(100).optional(),
   particleStyle: z.enum(['dots', 'stars', 'sparks', 'petals', 'bubbles']).optional(),
+  mapImageUrl: z.string().trim().min(1).max(3_000_000).optional(),
+})
+
+export const mapImageSchema = z.object({
+  mapImageUrl: z.string().trim().min(1).max(3_000_000),
 })
 
 export const eventSchema = z.object({
@@ -37,18 +42,19 @@ export const eventSchema = z.object({
 export const buildingSchema = z.object({
   name: z.string().min(2).max(100).trim(),
   shortName: z.string().max(10).trim().optional(),
-  lat: z.number().min(-90).max(90).optional(),
-  lng: z.number().min(-180).max(180).optional(),
-  floorPlanUrl: z.string().trim().max(3_000_000).optional(),
+})
+
+export const floorSchema = z.object({
+  buildingId: z.string().cuid(),
+  floorNumber: z.number().int().min(0).max(200),
+  floorPlanUrl: z.string().trim().min(1).max(3_000_000),
   entranceXPercent: z.number().min(0).max(100).optional(),
   entranceYPercent: z.number().min(0).max(100).optional(),
-  floors: z.number().int().min(1).max(20).optional(),
 })
 
 export const venueSchema = z.object({
   name: z.string().min(1).max(100).trim(),
-  buildingId: z.string().cuid().optional(),
-  floor: z.number().int().min(1).optional(),
+  floorId: z.string().cuid().optional(),
   capacity: z.number().int().positive().optional(),
   xPercent: z.number().min(0).max(100).optional(),
   yPercent: z.number().min(0).max(100).optional(),
@@ -60,7 +66,11 @@ export const venueSchema = z.object({
 export const verifySchema = z.object({
   collegeId: z.string().cuid(),
   email: z.string().email().toLowerCase().optional(),
-  phone: z.string().regex(/^[0-9]{10}$/).optional(),
+  // Loose on purpose: the route itself strips this to its last 10 digits before
+  // comparing, exactly like the CSV upload route does. Requiring exactly 10 raw
+  // digits here rejected anything typed with spaces, dashes, or a +91 prefix
+  // before normalization ever ran — a mismatch with what upload accepts.
+  phone: z.string().regex(/^[0-9+\-\s()]{7,15}$/).optional(),
 }).refine(data => data.email || data.phone, {
   message: 'Either email or phone is required',
 })

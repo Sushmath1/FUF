@@ -1,4 +1,5 @@
 export const GUEST_KEY = 'fuf_guest_id'
+export const COLLEGE_ID_KEY = 'fuf_college_id'
 
 export function getOrCreateGuestId(): string {
   if (typeof window === 'undefined') return ''

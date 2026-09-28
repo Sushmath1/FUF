@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
 
     const registrations = await prisma.registration.findMany({
       where: visitorId ? { visitorId, collegeId } : { guestSessionId, collegeId },
-      include: { event: { include: { venue: { include: { building: true } } } } },
+      include: { event: { include: { venue: { include: { floor: { include: { building: true } } } } } } },
       orderBy: { event: { startTime: 'asc' } },
     })
 
     const scheduleContext = registrations.map((registration) => ({
       event: registration.event.name,
       venue: registration.event.venue.name,
-      building: registration.event.venue.building?.name ?? null,
+      building: registration.event.venue.floor?.building?.name ?? null,
       startTime: registration.event.startTime.toLocaleTimeString('en-IN', {
         hour: '2-digit',
         minute: '2-digit',
@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
       status: registration.event.status,
       contact: registration.event.contactName ?? null,
     }))
+
+    if (scheduleContext.length === 0) {
+      return ok({ answer: 'Verify your registration first so I can see your events.' })
+    }
 
     const model = getModel('gemini-flash-lite-latest')
 
@@ -76,6 +80,7 @@ Question: ${question}`,
 
     return ok({ answer })
   } catch (e) {
+    console.error('AI ASK ERROR:', e)
     return serverErr(e)
   }
 }

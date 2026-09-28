@@ -9,7 +9,8 @@ import toast from 'react-hot-toast'
 import { Navbar } from '@/components/Navbar'
 import { ParticleBackground } from '@/components/ParticleBackground'
 import { ThemeProvider } from '@/components/ThemeProvider'
-import { getOrCreateGuestId } from '@/lib/guestSession'
+import { floorLabel } from '@/lib/floorLabel'
+import { COLLEGE_ID_KEY, getOrCreateGuestId } from '@/lib/guestSession'
 import { useOfflineCache } from '@/hooks/useOfflineCache'
 import { usePusherUpdates } from '@/hooks/usePusherUpdates'
 
@@ -65,8 +66,8 @@ type Recommendation = {
 type ChatItem = { role: 'user' | 'ai'; text: string }
 
 function fallbackDirections(event: ScheduleEvent) {
-  if (event.buildingName && event.floor) {
-    return `Head to ${event.buildingName}, floor ${event.floor}, follow the path to ${event.venueName}`
+  if (event.buildingName && event.floor !== null) {
+    return `Head to ${event.buildingName}, ${floorLabel(event.floor).toLowerCase()}, follow the path to ${event.venueName}`
   }
   if (event.buildingName) {
     return `Head to ${event.buildingName}, follow the path to ${event.venueName}`
@@ -75,7 +76,7 @@ function fallbackDirections(event: ScheduleEvent) {
 }
 
 export default function VisitorSchedulePage() {
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
 
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -91,13 +92,39 @@ export default function VisitorSchedulePage() {
   const [draftLoading, setDraftLoading] = useState(false)
   const [flashIds, setFlashIds] = useState<string[]>([])
   const [conflictAdvice, setConflictAdvice] = useState<Record<string, string>>({})
+  // Fallback for "Navigate to campus" if the schedule hasn't loaded (or has zero
+  // events, so collegeId isn't in the response yet) but a college was saved from
+  // an earlier verify or a previous visit to this page.
+  const [storedCollegeId, setStoredCollegeId] = useState('')
+
+  useEffect(() => {
+    const stored = localStorage.getItem(COLLEGE_ID_KEY)
+    if (stored) setStoredCollegeId(stored)
+  }, [])
 
   const sessionId = session?.user?.id ?? getOrCreateGuestId()
   const isGuest = !session?.user?.id
   const cacheKey = `fuf_schedule_${sessionId}`
   const { cached, save, lastSavedAt } = useOfflineCache<ScheduleResponse>(cacheKey)
 
+  // useSession()'s own background check can stall indefinitely in some browsers
+  // (a blocked request, a slow network) without ever resolving out of 'loading'.
+  // Waiting on it with no escape hatch would leave every guest — the overwhelming
+  // majority of visitors, who never log in at all — stuck on a page that never
+  // fetches anything. Give it a couple of seconds, then proceed as a guest anyway;
+  // worst case for a real visitor whose session is just slow is one wrong-id fetch
+  // that a subsequent poll or focus refetch corrects once the session does resolve.
+  const [gaveUpWaitingOnSession, setGaveUpWaitingOnSession] = useState(false)
+
+  useEffect(() => {
+    if (sessionStatus !== 'loading') return
+    const timer = setTimeout(() => setGaveUpWaitingOnSession(true), 2000)
+    return () => clearTimeout(timer)
+  }, [sessionStatus])
+
   const fetchSchedule = useCallback(async () => {
+    if (sessionStatus === 'loading' && !gaveUpWaitingOnSession) return
+
     setLoading(true)
     setError('')
 
@@ -108,6 +135,9 @@ export default function VisitorSchedulePage() {
 
       setSchedule(data as ScheduleResponse)
       save(data as ScheduleResponse)
+      if ((data as ScheduleResponse).collegeId) {
+        localStorage.setItem(COLLEGE_ID_KEY, (data as ScheduleResponse).collegeId)
+      }
     } catch (loadError) {
       if (cached) {
         setSchedule(cached)
@@ -117,7 +147,7 @@ export default function VisitorSchedulePage() {
     } finally {
       setLoading(false)
     }
-  }, [cached, isGuest, save, sessionId])
+  }, [cached, isGuest, save, sessionId, sessionStatus, gaveUpWaitingOnSession])
 
   const fetchRecommendations = useCallback(async (collegeId: string) => {
     try {
@@ -167,6 +197,23 @@ export default function VisitorSchedulePage() {
     }, 30000)
 
     return () => clearInterval(timer)
+  }, [fetchSchedule])
+
+  // Browsers throttle timers in background tabs, so a tab left open from before a
+  // visitor verified (still showing the empty pre-registration state) can sit stale
+  // well past the 30s poll interval — refetch the moment it's looked at again.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void fetchSchedule()
+    }
+
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [fetchSchedule])
 
   const onVenueChanged = useCallback(
@@ -429,7 +476,12 @@ export default function VisitorSchedulePage() {
                 placeholder="What are you into? Example: robotics, gaming, not business talks"
                 rows={4}
               />
-              <button className="btn-primary" onClick={buildDraft} disabled={draftLoading} style={{ marginTop: 12 }}>
+              <button
+                className="btn-primary"
+                onClick={buildDraft}
+                disabled={draftLoading || !interestInput.trim()}
+                style={{ marginTop: 12 }}
+              >
                 {draftLoading ? (
                   <>
                     <span className="spinner" /> AI is planning your day...
@@ -606,7 +658,7 @@ export default function VisitorSchedulePage() {
           )}
 
           <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Link href={`/visitor/map?collegeId=${schedule?.collegeId ?? ''}`} className="btn-primary" style={{ textDecoration: 'none' }}>
+            <Link href={`/visitor/map?collegeId=${schedule?.collegeId ?? storedCollegeId}`} className="btn-primary" style={{ textDecoration: 'none' }}>
               Navigate to campus
             </Link>
             <p style={{ alignSelf: 'center', color: 'var(--text-muted)', fontSize: 13 }}>

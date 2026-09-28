@@ -14,7 +14,7 @@ export async function GET(_: NextRequest, context: EventRouteContext) {
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      include: { venue: { include: { building: true } } },
+      include: { venue: { include: { floor: { include: { building: true } } } } },
     })
     if (!event || event.collegeId !== id) return err('Event not found', 404)
 

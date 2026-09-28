@@ -168,6 +168,16 @@ input:focus, textarea:focus, select:focus {
   border-color: rgba(var(--primary-rgb), 0.5);
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
 }
+/* Native option lists ignore themed backgrounds inconsistently; keep them fixed and readable in every theme */
+select option,
+select optgroup {
+  background-color: #ffffff;
+  color: #111827;
+}
+select option:disabled {
+  color: #6b7280;
+}
+
 input::placeholder, textarea::placeholder { color: rgba(var(--text-rgb), 0.35); }
 
 @keyframes float {

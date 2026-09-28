@@ -24,12 +24,6 @@ export async function PATCH(request: NextRequest, context: BuildingRouteContext)
       data: {
         name: body.name,
         shortName: body.shortName,
-        lat: body.lat,
-        lng: body.lng,
-        floorPlanUrl: body.floorPlanUrl,
-        entranceXPercent: body.entranceXPercent,
-        entranceYPercent: body.entranceYPercent,
-        floors: body.floors,
       },
     })
 
@@ -53,7 +47,7 @@ export async function DELETE(_: NextRequest, context: BuildingRouteContext) {
 
     const activeEvents = await prisma.event.count({
       where: {
-        venue: { buildingId },
+        venue: { floor: { buildingId } },
         status: { in: ['SCHEDULED', 'CHANGED'] },
         endTime: { gt: new Date() },
       },
@@ -61,6 +55,11 @@ export async function DELETE(_: NextRequest, context: BuildingRouteContext) {
 
     if (activeEvents > 0) {
       return err(`Cannot delete building with ${activeEvents} active events. Reassign events first.`, 400)
+    }
+
+    const floorCount = await prisma.floor.count({ where: { buildingId } })
+    if (floorCount > 0) {
+      return err(`Cannot delete building with ${floorCount} floor plan(s). Remove its floor plans first.`, 400)
     }
 
     await prisma.building.delete({ where: { id: buildingId } })
